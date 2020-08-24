@@ -1,27 +1,11 @@
 ﻿/*
- * MIT License
- *
- * Copyright (c) 2019 xiongziliang <771730766@qq.com>
+ * Copyright (c) 2016 The ZLMediaKit project authors. All Rights Reserved.
  *
  * This file is part of ZLMediaKit(https://github.com/xiongziliang/ZLMediaKit).
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Use of this source code is governed by MIT license that can be found in the
+ * LICENSE file in the root of the source tree. All contributing project authors
+ * may be found in the AUTHORS file in the root of the source tree.
  */
 
 #include "mk_common.h"
@@ -46,10 +30,8 @@ static TcpServer::Ptr http_server[2];
 static TcpServer::Ptr shell_server;
 
 #ifdef ENABLE_RTPPROXY
-#include "Rtp/UdpRecver.h"
-#include "Rtp/RtpSession.h"
-static std::shared_ptr<UdpRecver> udpRtpServer;
-static TcpServer::Ptr tcpRtpServer;
+#include "Rtp/RtpServer.h"
+static std::shared_ptr<RtpServer> rtpServer;
 #endif
 
 //////////////////////////environment init///////////////////////////
@@ -57,6 +39,8 @@ API_EXPORT void API_CALL mk_env_init(const mk_config *cfg) {
     assert(cfg);
     mk_env_init1(cfg->thread_num,
                  cfg->log_level,
+                 cfg->log_file_path,
+                 cfg->log_file_days,
                  cfg->ini_is_path,
                  cfg->ini,
                  cfg->ssl_is_path,
@@ -71,24 +55,34 @@ API_EXPORT void API_CALL mk_stop_all_server(){
     CLEAR_ARR(rtmp_server);
     CLEAR_ARR(http_server);
 #ifdef ENABLE_RTPPROXY
-    udpRtpServer = nullptr;
-    tcpRtpServer = nullptr;
+    rtpServer = nullptr;
 #endif
     stopAllTcpServer();
 }
 
-API_EXPORT void API_CALL mk_env_init1(  int thread_num,
-                                        int log_level,
-                                        int ini_is_path,
-                                        const char *ini,
-                                        int ssl_is_path,
-                                        const char *ssl,
-                                        const char *ssl_pwd) {
-
+API_EXPORT void API_CALL mk_env_init1(int thread_num,
+                                      int log_level,
+                                      const char *log_file_path,
+                                      int log_file_days,
+                                      int ini_is_path,
+                                      const char *ini,
+                                      int ssl_is_path,
+                                      const char *ssl,
+                                      const char *ssl_pwd) {
+    //确保只初始化一次
     static onceToken token([&]() {
+        //控制台日志
         Logger::Instance().add(std::make_shared<ConsoleChannel>("console", (LogLevel) log_level));
+        if(log_file_path && log_file_days){
+            //日志文件
+            auto channel = std::make_shared<FileChannel>("FileChannel", File::absolutePath(log_file_path, ""), (LogLevel) log_level);
+            Logger::Instance().add(channel);
+        }
+
+        //异步日志线程
         Logger::Instance().setWriter(std::make_shared<AsyncLogWriter>());
 
+        //设置线程数
         EventPollerPool::setPoolSize(thread_num);
         WorkThreadPool::setPoolSize(thread_num);
 
@@ -121,6 +115,17 @@ API_EXPORT void API_CALL mk_set_option(const char *key, const char *val) {
     }
     mINI::Instance()[key] = val;
 }
+
+API_EXPORT const char * API_CALL mk_get_option(const char *key)
+{
+    assert(key);
+    if (mINI::Instance().find(key) == mINI::Instance().end()) {
+        WarnL << "key:" << key << " not existed!";
+        return nullptr;
+    }
+    return mINI::Instance()[key].data();
+}
+
 
 API_EXPORT uint16_t API_CALL mk_http_server_start(uint16_t port, int ssl) {
     ssl = MAX(0,MIN(ssl,1));
@@ -176,18 +181,12 @@ API_EXPORT uint16_t API_CALL mk_rtmp_server_start(uint16_t port, int ssl) {
 API_EXPORT uint16_t API_CALL mk_rtp_server_start(uint16_t port){
 #ifdef ENABLE_RTPPROXY
     try {
-        //创建rtp tcp服务器
-        tcpRtpServer = std::make_shared<TcpServer>();
-        tcpRtpServer->start<RtpSession>(port);
-
-        //创建rtp udp服务器
-        auto ret = tcpRtpServer->getPort();
-        udpRtpServer = std::make_shared<UdpRecver>();
-        udpRtpServer->initSock(port);
-        return ret;
+        //创建rtp 服务器
+        rtpServer = std::make_shared<RtpServer>();
+        rtpServer->start(port);
+        return rtpServer->getPort();
     } catch (std::exception &ex) {
-        tcpRtpServer.reset();
-        udpRtpServer.reset();
+        rtpServer.reset();
         WarnL << ex.what();
         return 0;
     }

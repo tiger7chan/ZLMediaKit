@@ -1,27 +1,11 @@
 ﻿/*
- * MIT License
- *
- * Copyright (c) 2016-2019 xiongziliang <771730766@qq.com>
+ * Copyright (c) 2016 The ZLMediaKit project authors. All Rights Reserved.
  *
  * This file is part of ZLMediaKit(https://github.com/xiongziliang/ZLMediaKit).
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Use of this source code is governed by MIT license that can be found in the
+ * LICENSE file in the root of the source tree. All contributing project authors
+ * may be found in the AUTHORS file in the root of the source tree.
  */
 
 #ifndef ZLMEDIAKIT_AACRTPCODEC_H
@@ -33,7 +17,7 @@ namespace mediakit{
 /**
  * aac rtp转adts类
  */
-class AACRtpDecoder : public RtpCodec , public ResourcePoolHelper<AACFrame> {
+class AACRtpDecoder : public RtpCodec , public ResourcePoolHelper<FrameImp> {
 public:
     typedef std::shared_ptr<AACRtpDecoder> Ptr;
 
@@ -47,20 +31,21 @@ public:
      */
     bool inputRtp(const RtpPacket::Ptr &rtp, bool key_pos = false) override;
 
-    TrackType getTrackType() const override{
-        return TrackAudio;
-    }
-    CodecId getCodecId() const override{
+    CodecId getCodecId() const override {
         return CodecAAC;
     }
+
 protected:
     AACRtpDecoder();
+
 private:
-    void onGetAAC(const AACFrame::Ptr &frame);
-    AACFrame::Ptr obtainFrame();
+    void obtainFrame();
+    void flushData();
+
 private:
-    AACFrame::Ptr _adts;
+    FrameImp::Ptr _frame;
     string _aac_cfg;
+    uint32_t _last_dts = 0;
 };
 
 
@@ -75,13 +60,13 @@ public:
      * @param ui32Ssrc ssrc
      * @param ui32MtuSize mtu 大小
      * @param ui32SampleRate 采样率
-     * @param ui8PlayloadType pt类型
+     * @param ui8PayloadType pt类型
      * @param ui8Interleaved rtsp interleaved 值
      */
     AACRtpEncoder(uint32_t ui32Ssrc,
                   uint32_t ui32MtuSize,
                   uint32_t ui32SampleRate,
-                  uint8_t ui8PlayloadType = 97,
+                  uint8_t ui8PayloadType = 97,
                   uint8_t ui8Interleaved = TrackAudio * 2);
     ~AACRtpEncoder() {}
 
@@ -90,8 +75,10 @@ public:
      * @param frame 带dats头的aac数据
      */
     void inputFrame(const Frame::Ptr &frame) override;
+
 private:
     void makeAACRtp(const void *pData, unsigned int uiLen, bool bMark, uint32_t uiStamp);
+
 private:
     unsigned char _aucSectionBuf[1600];
 };

@@ -1,27 +1,11 @@
 ﻿/*
- * MIT License
- *
- * Copyright (c) 2019 xiongziliang <771730766@qq.com>
+ * Copyright (c) 2016 The ZLMediaKit project authors. All Rights Reserved.
  *
  * This file is part of ZLMediaKit(https://github.com/xiongziliang/ZLMediaKit).
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Use of this source code is governed by MIT license that can be found in the
+ * LICENSE file in the root of the source tree. All contributing project authors
+ * may be found in the AUTHORS file in the root of the source tree.
  */
 
 #include "mk_events.h"
@@ -62,7 +46,7 @@ API_EXPORT void API_CALL mk_events_listen(const mk_events *events){
                 s_events.on_mk_http_request((mk_parser)&parser,
                                             (mk_http_response_invoker)&invoker,
                                             &consumed_int,
-                                            (mk_tcp_session)&sender);
+                                            (mk_sock_info)&sender);
                 consumed = consumed_int;
             }
         });
@@ -73,7 +57,7 @@ API_EXPORT void API_CALL mk_events_listen(const mk_events *events){
                                            path.c_str(),
                                            is_dir,
                                            (mk_http_access_path_invoker)&invoker,
-                                           (mk_tcp_session)&sender);
+                                           (mk_sock_info)&sender);
             } else{
                 invoker("","",0);
             }
@@ -85,7 +69,7 @@ API_EXPORT void API_CALL mk_events_listen(const mk_events *events){
                 strcpy(path_c,path.c_str());
                 s_events.on_mk_http_before_access((mk_parser) &parser,
                                                   path_c,
-                                                  (mk_tcp_session) &sender);
+                                                  (mk_sock_info) &sender);
                 path = path_c;
             }
         });
@@ -95,7 +79,7 @@ API_EXPORT void API_CALL mk_events_listen(const mk_events *events){
             if (s_events.on_mk_rtsp_get_realm) {
                 s_events.on_mk_rtsp_get_realm((mk_media_info) &args,
                                               (mk_rtsp_get_realm_invoker) &invoker,
-                                              (mk_tcp_session) &sender);
+                                              (mk_sock_info) &sender);
             }else{
                 invoker("");
             }
@@ -108,7 +92,7 @@ API_EXPORT void API_CALL mk_events_listen(const mk_events *events){
                                          user_name.c_str(),
                                          must_no_encrypt,
                                          (mk_rtsp_auth_invoker) &invoker,
-                                         (mk_tcp_session) &sender);
+                                         (mk_sock_info) &sender);
             }
         });
 
@@ -116,7 +100,7 @@ API_EXPORT void API_CALL mk_events_listen(const mk_events *events){
             if (s_events.on_mk_media_publish) {
                 s_events.on_mk_media_publish((mk_media_info) &args,
                                              (mk_publish_auth_invoker) &invoker,
-                                             (mk_tcp_session) &sender);
+                                             (mk_sock_info) &sender);
             }else{
                 GET_CONFIG(bool,toRtxp,General::kPublishToRtxp);
                 GET_CONFIG(bool,toHls,General::kPublishToHls);
@@ -129,7 +113,7 @@ API_EXPORT void API_CALL mk_events_listen(const mk_events *events){
             if (s_events.on_mk_media_play) {
                 s_events.on_mk_media_play((mk_media_info) &args,
                                           (mk_auth_invoker) &invoker,
-                                          (mk_tcp_session) &sender);
+                                          (mk_sock_info) &sender);
             }else{
                 invoker("");
             }
@@ -140,7 +124,7 @@ API_EXPORT void API_CALL mk_events_listen(const mk_events *events){
                 s_events.on_mk_shell_login(user_name.c_str(),
                                            passwd.c_str(),
                                            (mk_auth_invoker) &invoker,
-                                           (mk_tcp_session) &sender);
+                                           (mk_sock_info) &sender);
             }else{
                 invoker("");
             }
@@ -151,14 +135,15 @@ API_EXPORT void API_CALL mk_events_listen(const mk_events *events){
                 s_events.on_mk_flow_report((mk_media_info) &args,
                                            totalBytes,
                                            totalDuration,
-                                           isPlayer);
+                                           isPlayer,
+                                           (mk_sock_info)&sender);
             }
         });
 
         NoticeCenter::Instance().addListener(&s_tag,Broadcast::kBroadcastNotFoundStream,[](BroadcastNotFoundStreamArgs){
             if (s_events.on_mk_media_not_found) {
                 s_events.on_mk_media_not_found((mk_media_info) &args,
-                                               (mk_tcp_session) &sender);
+                                               (mk_sock_info) &sender);
             }
         });
 

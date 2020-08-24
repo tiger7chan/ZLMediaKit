@@ -1,28 +1,13 @@
 ﻿/*
- * MIT License
- *
- * Copyright (c) 2016-2019 xiongziliang <771730766@qq.com>
+ * Copyright (c) 2016 The ZLMediaKit project authors. All Rights Reserved.
  *
  * This file is part of ZLMediaKit(https://github.com/xiongziliang/ZLMediaKit).
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Use of this source code is governed by MIT license that can be found in the
+ * LICENSE file in the root of the source tree. All contributing project authors
+ * may be found in the AUTHORS file in the root of the source tree.
  */
+
 #ifndef __rtmp_h
 #define __rtmp_h
 
@@ -87,6 +72,15 @@ using namespace toolkit;
 #define FLV_KEY_FRAME				1
 #define FLV_INTER_FRAME				2
 
+#define FLV_CODEC_AAC 10
+#define FLV_CODEC_H264 7
+//金山扩展: https://github.com/ksvc/FFmpeg/wiki
+#define FLV_CODEC_H265 12
+#define FLV_CODEC_G711A 7
+#define FLV_CODEC_G711U 8
+//参考学而思网校: https://github.com/notedit/rtmp/commit/6e314ac5b29611431f8fb5468596b05815743c10
+#define FLV_CODEC_OPUS 13
+
 namespace mediakit {
 
 #if defined(_WIN32)
@@ -139,8 +133,7 @@ public:
     uint32_t bodySize = 0;
     uint32_t timeStamp = 0;
     bool hasAbsStamp = false;
-    bool hasExtStamp = false;
-    uint32_t deltaStamp = 0;
+    uint32_t tsField = 0;
     uint32_t streamId;
     uint32_t chunkId;
     std::string strBuf;
@@ -162,34 +155,32 @@ public:
         bodySize = that.bodySize;
         timeStamp = that.timeStamp;
         hasAbsStamp = that.hasAbsStamp;
-        hasExtStamp = that.hasExtStamp;
-        deltaStamp = that.deltaStamp;
+        tsField = that.tsField;
         streamId = that.streamId;
         chunkId = that.chunkId;
         strBuf = std::move(that.strBuf);
     }
     bool isVideoKeyFrame() const {
-        return typeId == MSG_VIDEO && (uint8_t) strBuf[0] >> 4 == FLV_KEY_FRAME
-        && (uint8_t) strBuf[1] == 1;
+        return typeId == MSG_VIDEO && (uint8_t) strBuf[0] >> 4 == FLV_KEY_FRAME && (uint8_t) strBuf[1] == 1;
     }
     bool isCfgFrame() const {
-        return (typeId == MSG_VIDEO || typeId == MSG_AUDIO)
-        && (uint8_t) strBuf[1] == 0;
+        switch (typeId){
+            case MSG_VIDEO : return strBuf[1] == 0;
+            case MSG_AUDIO : {
+                switch (getMediaType()){
+                    case FLV_CODEC_AAC : return strBuf[1] == 0;
+                    default : return false;
+                }
+            }
+            default : return false;
+        }
     }
     int getMediaType() const {
         switch (typeId) {
-            case MSG_VIDEO: {
-                return (uint8_t) strBuf[0] & 0x0F;
-            }
-                break;
-            case MSG_AUDIO: {
-                return (uint8_t) strBuf[0] >> 4;
-            }
-                break;
-            default:
-                break;
+            case MSG_VIDEO : return (uint8_t) strBuf[0] & 0x0F;
+            case MSG_AUDIO : return (uint8_t) strBuf[0] >> 4;
+            default : return 0;
         }
-        return 0;
     }
     int getAudioSampleRate() const {
         if (typeId != MSG_AUDIO) {
@@ -215,87 +206,7 @@ public:
         const static int channel[] = { 1, 2 };
         return channel[flvStereoOrMono];
     }
-
-    /**
-     * 返回不带0x00 00 00 01头的sps
-     * @return
-     */
-    string getH264SPS() const {
-        string ret;
-        if (getMediaType() != 7) {
-            return ret;
-        }
-        if (!isCfgFrame()) {
-            return ret;
-        }
-        if (strBuf.size() < 13) {
-            WarnL << "bad H264 cfg!";
-            return ret;
-        }
-        uint16_t sps_size ;
-        memcpy(&sps_size,strBuf.data() + 11,2);
-        sps_size = ntohs(sps_size);
-        if ((int) strBuf.size() < 13 + sps_size) {
-            WarnL << "bad H264 cfg!";
-            return ret;
-        }
-        ret.assign(strBuf.data() + 13, sps_size);
-        return ret;
-    }
-
-    /**
-     * 返回不带0x00 00 00 01头的pps
-     * @return
-     */
-    string getH264PPS() const {
-        string ret;
-        if (getMediaType() != 7) {
-            return ret;
-        }
-        if (!isCfgFrame()) {
-            return ret;
-        }
-        if (strBuf.size() < 13) {
-            WarnL << "bad H264 cfg!";
-            return ret;
-        }
-        uint16_t sps_size ;
-        memcpy(&sps_size,strBuf.data() + 11,2);
-        sps_size = ntohs(sps_size);
-        
-        if ((int) strBuf.size() < 13 + sps_size + 1 + 2) {
-            WarnL << "bad H264 cfg!";
-            return ret;
-        }
-        uint16_t pps_size ;
-        memcpy(&pps_size,strBuf.data() + 13 + sps_size + 1,2);
-        pps_size = ntohs(pps_size);
-        
-        if ((int) strBuf.size() < 13 + sps_size + 1 + 2 + pps_size) {
-            WarnL << "bad H264 cfg!";
-            return ret;
-        }
-        ret.assign(strBuf.data() + 13 + sps_size + 1 + 2, pps_size);
-        return ret;
-    }
-    string getAacCfg() const {
-        string ret;
-        if (getMediaType() != 10) {
-            return ret;
-        }
-        if (!isCfgFrame()) {
-            return ret;
-        }
-        if (strBuf.size() < 4) {
-            WarnL << "bad aac cfg!";
-            return ret;
-        }
-        ret = strBuf.substr(2, 2);
-        return ret;
-    }
 };
-
-
 
 /**
  * rtmp metadata基类，用于描述rtmp格式信息
@@ -309,6 +220,8 @@ public:
     const AMFValue &getMetadata() const{
         return _metadata;
     }
+
+    static void addTrack(AMFValue &metadata, const Track::Ptr &track);
 protected:
     AMFValue _metadata;
 };
@@ -325,24 +238,12 @@ public:
               const map<string,string> &header = map<string,string>()){
         _metadata.set("duration", dur_sec);
         _metadata.set("fileSize", 0);
-        _metadata.set("server","ZLMediaKit");
+        _metadata.set("server",SERVER_NAME);
         for (auto &pr : header){
             _metadata.set(pr.first, pr.second);
         }
     }
 
-    /**
-     * 返回音频或视频类型
-     * @return
-     */
-    TrackType getTrackType() const override {
-        return TrackTitle;
-    }
-
-    /**
-     * 返回编码器id
-     * @return
-     */
     CodecId getCodecId() const override{
         return CodecInvalid;
     }
@@ -355,25 +256,12 @@ public:
     VideoMeta(const VideoTrack::Ptr &video,int datarate = 5000);
     virtual ~VideoMeta(){}
 
-    /**
-     * 返回音频或视频类型
-     * @return
-     */
-    TrackType getTrackType() const override {
-        return TrackVideo;
-    }
-
-    /**
-     * 返回编码器id
-     * @return
-     */
     CodecId getCodecId() const override{
         return _codecId;
     }
 private:
     CodecId _codecId;
 };
-
 
 class AudioMeta : public Metadata{
 public:
@@ -383,18 +271,6 @@ public:
 
     virtual ~AudioMeta(){}
 
-    /**
-     * 返回音频或视频类型
-     * @return
-     */
-    TrackType getTrackType() const override {
-        return TrackAudio;
-    }
-
-    /**
-     * 返回编码器id
-     * @return
-     */
     CodecId getCodecId() const override{
         return _codecId;
     }
@@ -402,9 +278,8 @@ private:
     CodecId _codecId;
 };
 
+//根据音频track获取flags
+uint8_t getAudioRtmpFlags(const Track::Ptr &track);
 
 }//namespace mediakit
-
-
-
-#endif
+#endif//__rtmp_h

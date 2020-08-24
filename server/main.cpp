@@ -1,27 +1,11 @@
 ﻿/*
- * MIT License
- *
- * Copyright (c) 2016-2019 xiongziliang <771730766@qq.com>
+ * Copyright (c) 2016 The ZLMediaKit project authors. All Rights Reserved.
  *
  * This file is part of ZLMediaKit(https://github.com/xiongziliang/ZLMediaKit).
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Use of this source code is governed by MIT license that can be found in the
+ * LICENSE file in the root of the source tree. All contributing project authors
+ * may be found in the AUTHORS file in the root of the source tree.
  */
 
 #include <map>
@@ -36,13 +20,11 @@
 #include "Network/TcpServer.h"
 #include "Poller/EventPoller.h"
 #include "Common/config.h"
-#include "Rtsp/UDPServer.h"
 #include "Rtsp/RtspSession.h"
-#include "Rtp/RtpSession.h"
 #include "Rtmp/RtmpSession.h"
 #include "Shell/ShellSession.h"
 #include "Http/WebSocketSession.h"
-#include "Rtp/UdpRecver.h"
+#include "Rtp/RtpServer.h"
 #include "WebApi.h"
 #include "WebHook.h"
 
@@ -91,8 +73,10 @@ onceToken token1([](){
 namespace Rtmp {
 #define RTMP_FIELD "rtmp."
 const string kPort = RTMP_FIELD"port";
+const string kSSLPort = RTMP_FIELD"sslport";
 onceToken token1([](){
     mINI::Instance()[kPort] = 1935;
+    mINI::Instance()[kSSLPort] = 19350;
 },nullptr);
 } //namespace RTMP
 
@@ -271,9 +255,10 @@ int start_main(int argc,char *argv[]) {
         uint16_t rtspPort = mINI::Instance()[Rtsp::kPort];
         uint16_t rtspsPort = mINI::Instance()[Rtsp::kSSLPort];
         uint16_t rtmpPort = mINI::Instance()[Rtmp::kPort];
+        uint16_t rtmpsPort = mINI::Instance()[Rtmp::kSSLPort];
         uint16_t httpPort = mINI::Instance()[Http::kPort];
         uint16_t httpsPort = mINI::Instance()[Http::kSSLPort];
-        uint16_t rtp_proxy = mINI::Instance()[RtpProxy::kPort];
+        uint16_t rtpPort = mINI::Instance()[RtpProxy::kPort];
 
         //设置poller线程数,该函数必须在使用ZLToolKit网络相关对象之前调用才能生效
         EventPollerPool::setPoolSize(threads);
@@ -281,38 +266,46 @@ int start_main(int argc,char *argv[]) {
         //简单的telnet服务器，可用于服务器调试，但是不能使用23端口，否则telnet上了莫名其妙的现象
         //测试方法:telnet 127.0.0.1 9000
         TcpServer::Ptr shellSrv(new TcpServer());
+
+        //rtsp[s]服务器, 可用于诸如亚马逊echo show这样的设备访问
         TcpServer::Ptr rtspSrv(new TcpServer());
-        TcpServer::Ptr rtmpSrv(new TcpServer());
-        TcpServer::Ptr httpSrv(new TcpServer());
-        //如果支持ssl，还可以开启https服务器
-        TcpServer::Ptr httpsSrv(new TcpServer());
-        //支持ssl加密的rtsp服务器，可用于诸如亚马逊echo show这样的设备访问
         TcpServer::Ptr rtspSSLSrv(new TcpServer());
 
+        //rtmp[s]服务器
+        TcpServer::Ptr rtmpSrv(new TcpServer());
+        TcpServer::Ptr rtmpsSrv(new TcpServer());
+
+        //http[s]服务器
+        TcpServer::Ptr httpSrv(new TcpServer());
+        TcpServer::Ptr httpsSrv(new TcpServer());
+
 #if defined(ENABLE_RTPPROXY)
-        UdpRecver recver;
-        TcpServer::Ptr tcpRtpServer(new TcpServer());
+        //GB28181 rtp推流端口，支持UDP/TCP
+        RtpServer::Ptr rtpServer = std::make_shared<RtpServer>();
 #endif//defined(ENABLE_RTPPROXY)
 
         try {
             //rtsp服务器，端口默认554
-            rtspSrv->start<RtspSession>(rtspPort);//默认554
+            if(rtspPort) { rtspSrv->start<RtspSession>(rtspPort); }
             //rtsps服务器，端口默认322
-            rtspSSLSrv->start<RtspSessionWithSSL>(rtspsPort);
+            if(rtspsPort) { rtspSSLSrv->start<RtspSessionWithSSL>(rtspsPort); }
+
             //rtmp服务器，端口默认1935
-            rtmpSrv->start<RtmpSession>(rtmpPort);
+            if(rtmpPort) { rtmpSrv->start<RtmpSession>(rtmpPort); }
+            //rtmps服务器，端口默认19350
+            if(rtmpsPort) { rtmpsSrv->start<RtmpSessionWithSSL>(rtmpsPort); }
+
             //http服务器，端口默认80
-            httpSrv->start<HttpSession>(httpPort);
+            if(httpPort) { httpSrv->start<HttpSession>(httpPort); }
             //https服务器，端口默认443
-            httpsSrv->start<HttpsSession>(httpsPort);
+            if(httpsPort) { httpsSrv->start<HttpsSession>(httpsPort); }
+
             //telnet远程调试服务器
-            shellSrv->start<ShellSession>(shellPort);
+            if(shellPort) { shellSrv->start<ShellSession>(shellPort); }
 
 #if defined(ENABLE_RTPPROXY)
-            //创建rtp udp服务器
-            recver.initSock(rtp_proxy);
-            //创建rtp tcp服务器
-            tcpRtpServer->start<RtpSession>(rtp_proxy);
+            //创建rtp服务器
+            if(rtpPort){ rtpServer->start(rtpPort); }
 #endif//defined(ENABLE_RTPPROXY)
 
         }catch (std::exception &ex){
@@ -354,12 +347,11 @@ int start_main(int argc,char *argv[]) {
     }
     unInstallWebApi();
     unInstallWebHook();
-    Recorder::stopAll();
     //休眠1秒再退出，防止资源释放顺序错误
     InfoL << "程序退出中,请等待...";
     sleep(1);
     InfoL << "程序退出完毕!";
-	return 0;
+    return 0;
 }
 
 #ifndef DISABLE_MAIN

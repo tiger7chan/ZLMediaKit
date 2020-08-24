@@ -1,34 +1,17 @@
 ﻿/*
- * MIT License
- *
- * Copyright (c) 2019 xiongziliang <771730766@qq.com>
+ * Copyright (c) 2016 The ZLMediaKit project authors. All Rights Reserved.
  *
  * This file is part of ZLMediaKit(https://github.com/xiongziliang/ZLMediaKit).
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Use of this source code is governed by MIT license that can be found in the
+ * LICENSE file in the root of the source tree. All contributing project authors
+ * may be found in the AUTHORS file in the root of the source tree.
  */
 
 #include <assert.h>
 #include "mk_events_objects.h"
 #include "Common/config.h"
 #include "Record/MP4Recorder.h"
-#include "Network/TcpSession.h"
 #include "Http/HttpSession.h"
 #include "Http/HttpBody.h"
 #include "Http/HttpClient.h"
@@ -130,7 +113,7 @@ API_EXPORT const char* API_CALL mk_parser_get_tail(const mk_parser ctx){
 API_EXPORT const char* API_CALL mk_parser_get_header(const mk_parser ctx,const char *key){
     assert(ctx && key);
     Parser *parser = (Parser *)ctx;
-    return parser->getValues()[key].c_str();
+    return parser->getHeader()[key].c_str();
 }
 API_EXPORT const char* API_CALL mk_parser_get_content(const mk_parser ctx, int *length){
     assert(ctx);
@@ -153,16 +136,31 @@ API_EXPORT const char* API_CALL mk_media_info_get_schema(const mk_media_info ctx
     MediaInfo *info = (MediaInfo *)ctx;
     return info->_schema.c_str();
 }
+
 API_EXPORT const char* API_CALL mk_media_info_get_vhost(const mk_media_info ctx){
     assert(ctx);
     MediaInfo *info = (MediaInfo *)ctx;
     return info->_vhost.c_str();
 }
+
+API_EXPORT const char* API_CALL mk_media_info_get_host(const mk_media_info ctx){
+    assert(ctx);
+    MediaInfo *info = (MediaInfo *)ctx;
+    return info->_host.c_str();
+}
+
+API_EXPORT uint16_t API_CALL mk_media_info_get_port(const mk_media_info ctx){
+    assert(ctx);
+    MediaInfo *info = (MediaInfo *)ctx;
+    return std::stoi(info->_port);
+}
+
 API_EXPORT const char* API_CALL mk_media_info_get_app(const mk_media_info ctx){
     assert(ctx);
     MediaInfo *info = (MediaInfo *)ctx;
     return info->_app.c_str();
 }
+
 API_EXPORT const char* API_CALL mk_media_info_get_stream(const mk_media_info ctx){
     assert(ctx);
     MediaInfo *info = (MediaInfo *)ctx;
@@ -290,7 +288,7 @@ API_EXPORT void API_CALL mk_http_response_invoker_do_file(const mk_http_response
     assert(ctx && request_parser && response_header && response_file_path);
     auto header = get_http_header(response_header);
     HttpSession::HttpResponseInvoker *invoker = (HttpSession::HttpResponseInvoker *)ctx;
-    (*invoker).responseFile(((Parser*)(request_parser))->getValues(),header,response_file_path);
+    (*invoker).responseFile(((Parser *) (request_parser))->getHeader(), header, response_file_path);
 }
 
 API_EXPORT void API_CALL mk_http_response_invoker_do(const mk_http_response_invoker ctx,
@@ -417,7 +415,7 @@ API_EXPORT mk_auth_invoker API_CALL mk_auth_invoker_clone(const mk_auth_invoker 
     return new Broadcast::AuthInvoker(*invoker);
 }
 
-API_EXPORT void API_CALL mk_auth_invoker_clone_relase(const mk_auth_invoker ctx){
+API_EXPORT void API_CALL mk_auth_invoker_clone_release(const mk_auth_invoker ctx){
     assert(ctx);
     Broadcast::AuthInvoker *invoker = (Broadcast::AuthInvoker *)ctx;
     delete invoker;

@@ -1,4 +1,14 @@
-﻿#include <stdlib.h>
+﻿/*
+ * Copyright (c) 2016 The ZLMediaKit project authors. All Rights Reserved.
+ *
+ * This file is part of ZLMediaKit(https://github.com/xiongziliang/ZLMediaKit).
+ *
+ * Use of this source code is governed by MIT license that can be found in the
+ * LICENSE file in the root of the source tree. All contributing project authors
+ * may be found in the AUTHORS file in the root of the source tree.
+ */
+
+#include <stdlib.h>
 #include <memory.h>
 #if !defined(_WIN32)
 #include <dirent.h>
@@ -51,40 +61,6 @@ public:
     }
 };
 
-void get_file_path(const char *path, const char *file_name, char *file_path) {
-    strcpy(file_path, path);
-    if (file_path[strlen(file_path) - 1] != '/') {
-        strcat(file_path, "/");
-    }
-    strcat(file_path, file_name);
-}
-
-template <typename FUNC>
-void for_each_file(const char *path, FUNC &&func){
-    DIR *dir;
-    dirent *dir_info;
-    char file_path[PATH_MAX];
-    if (File::is_file(path)) {
-        func(path);
-        return;
-    }
-    if (File::is_dir(path)) {
-        if ((dir = opendir(path)) == NULL) {
-            closedir(dir);
-            return;
-        }
-        while ((dir_info = readdir(dir)) != NULL) {
-            if (File::is_special_dir(dir_info->d_name)) {
-                continue;
-            }
-            get_file_path(path, dir_info->d_name, file_path);
-            for_each_file(file_path,std::forward<FUNC>(func));
-        }
-        closedir(dir);
-        return;
-    }
-}
-
 static const char s_bom[] = "\xEF\xBB\xBF";
 
 void add_or_rm_bom(const char *file,bool rm_bom){
@@ -126,6 +102,7 @@ void process_file(const char *file,bool rm_bom){
     InfoL << (rm_bom ? "删除" : "添加") << "bom:" << file;
 }
 
+/// 这个程序是为了统一添加或删除utf-8 bom头
 int main(int argc, char *argv[]) {
     CMD_main cmd_main;
     try {
@@ -148,23 +125,26 @@ int main(int argc, char *argv[]) {
     bool no_filter = filter_set.find("*") != filter_set.end();
     //设置日志
     Logger::Instance().add(std::make_shared<ConsoleChannel>());
-
-    for_each_file(path.data(),[&](const char *path){
-        if(!no_filter){
+    File::scanDir(path, [&](const string &path, bool isDir) {
+        if (isDir) {
+            return true;
+        }
+        if (!no_filter) {
             //开启了过滤器
-            auto pos = strstr(path,".");
-            if(pos == nullptr){
+            auto pos = strstr(path.data(), ".");
+            if (pos == nullptr) {
                 //没有后缀
-                return;
+                return true;
             }
             auto ext = pos + 1;
-            if(filter_set.find(ext) == filter_set.end()){
+            if (filter_set.find(ext) == filter_set.end()) {
                 //后缀不匹配
-                return;
+                return true;
             }
         }
         //该文件匹配
-        process_file(path,rm_bom);
-    });
+        process_file(path.data(), rm_bom);
+        return true;
+    }, true);
     return 0;
 }

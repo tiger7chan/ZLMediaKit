@@ -1,27 +1,11 @@
 ﻿/*
- * MIT License
- *
- * Copyright (c) 2019 xiongziliang <771730766@qq.com>
+ * Copyright (c) 2016 The ZLMediaKit project authors. All Rights Reserved.
  *
  * This file is part of ZLMediaKit(https://github.com/xiongziliang/ZLMediaKit).
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Use of this source code is governed by MIT license that can be found in the
+ * LICENSE file in the root of the source tree. All contributing project authors
+ * may be found in the AUTHORS file in the root of the source tree.
  */
 
 #include <signal.h>
@@ -55,7 +39,8 @@ typedef struct {
  * @param session 会话处理对象
  */
 void API_CALL on_mk_tcp_session_create(uint16_t server_port,mk_tcp_session session){
-    log_printf(LOG_LEV,"%s %d",mk_tcp_session_peer_ip(session),(int)mk_tcp_session_peer_port(session));
+    char ip[64];
+    log_printf(LOG_LEV,"%s %d",mk_tcp_session_peer_ip(session,ip),(int)mk_tcp_session_peer_port(session));
     tcp_session_user_data *user_data = malloc(sizeof(tcp_session_user_data));
     user_data->_session = session;
     mk_tcp_session_set_user_data(session,user_data);
@@ -68,7 +53,8 @@ void API_CALL on_mk_tcp_session_create(uint16_t server_port,mk_tcp_session sessi
  * @param len 数据长度
  */
 void API_CALL on_mk_tcp_session_data(uint16_t server_port,mk_tcp_session session,const char *data,int len){
-    log_printf(LOG_LEV,"from %s %d, data[%d]: %s",mk_tcp_session_peer_ip(session),(int)mk_tcp_session_peer_port(session), len,data);
+    char ip[64];
+    log_printf(LOG_LEV,"from %s %d, data[%d]: %s",mk_tcp_session_peer_ip(session,ip),(int)mk_tcp_session_peer_port(session), len,data);
     mk_tcp_session_send(session,"echo:",0);
     mk_tcp_session_send(session,data,len);
 }
@@ -78,7 +64,8 @@ void API_CALL on_mk_tcp_session_data(uint16_t server_port,mk_tcp_session session
  * @param session 会话处理对象
  */
 void API_CALL on_mk_tcp_session_manager(uint16_t server_port,mk_tcp_session session){
-    log_printf(LOG_LEV,"%s %d",mk_tcp_session_peer_ip(session),(int)mk_tcp_session_peer_port(session));
+    char ip[64];
+    log_printf(LOG_LEV,"%s %d",mk_tcp_session_peer_ip(session,ip),(int)mk_tcp_session_peer_port(session));
 }
 
 /**
@@ -89,7 +76,8 @@ void API_CALL on_mk_tcp_session_manager(uint16_t server_port,mk_tcp_session sess
  * @param msg 错误提示
  */
 void API_CALL on_mk_tcp_session_disconnect(uint16_t server_port,mk_tcp_session session,int code,const char *msg){
-    log_printf(LOG_LEV,"%s %d: %d %s",mk_tcp_session_peer_ip(session),(int)mk_tcp_session_peer_port(session),code,msg);
+    char ip[64];
+    log_printf(LOG_LEV,"%s %d: %d %s",mk_tcp_session_peer_ip(session,ip),(int)mk_tcp_session_peer_port(session),code,msg);
     tcp_session_user_data *user_data = (tcp_session_user_data *)mk_tcp_session_get_user_data(session);
     free(user_data);
 }
@@ -172,7 +160,7 @@ void test_server(){
     };
 
     mk_tcp_server_events_listen(&events_server);
-    mk_tcp_server_server_start(80,TCP_TYPE);
+    mk_tcp_server_start(80, TCP_TYPE);
 }
 
 void test_client(){
@@ -195,8 +183,8 @@ void test_client(){
 }
 
 int main(int argc, char *argv[]) {
-    char *ini_path = mk_uitl_get_exe_dir("c_api.ini");
-    char *ssl_path = mk_uitl_get_exe_dir("ssl.p12");
+    char *ini_path = mk_util_get_exe_dir("c_api.ini");
+    char *ssl_path = mk_util_get_exe_dir("ssl.p12");
 
     mk_config config = {
             .ini = ini_path,

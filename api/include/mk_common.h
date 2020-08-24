@@ -1,27 +1,11 @@
 ﻿/*
- * MIT License
- *
- * Copyright (c) 2019 xiongziliang <771730766@qq.com>
+ * Copyright (c) 2016 The ZLMediaKit project authors. All Rights Reserved.
  *
  * This file is part of ZLMediaKit(https://github.com/xiongziliang/ZLMediaKit).
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Use of this source code is governed by MIT license that can be found in the
+ * LICENSE file in the root of the source tree. All contributing project authors
+ * may be found in the AUTHORS file in the root of the source tree.
  */
 
 #ifndef MK_COMMON_H
@@ -30,13 +14,20 @@
 #include <stdint.h>
 
 #if defined(_WIN32)
-#if defined(MediaKitApi_EXPORTS)
-		#define API_EXPORT __declspec(dllexport)
-	#else
-		#define API_EXPORT __declspec(dllimport)
-	#endif
 
-	#define API_CALL __cdecl
+#ifndef MediaKitApi_STATIC
+#if defined(MediaKitApi_EXPORTS)
+        #define API_EXPORT __declspec(dllexport)
+    #else
+        #define API_EXPORT __declspec(dllimport)
+    #endif
+
+    #define API_CALL __cdecl
+#else
+#define API_EXPORT
+#define API_CALL
+#endif
+
 #else
 #define API_EXPORT
 #define API_CALL
@@ -49,8 +40,13 @@ extern "C" {
 typedef struct {
     // 线程数
     int thread_num;
+
     // 日志级别,支持0~4
     int log_level;
+    //文件日志保存路径,路径可以不存在(内部可以创建文件夹)，设置为NULL关闭日志输出至文件
+    const char *log_file_path;
+    //文件日志保存天数,设置为0关闭日志文件
+    int log_file_days;
 
     // 配置文件是内容还是路径
     int ini_is_path;
@@ -80,19 +76,23 @@ API_EXPORT void API_CALL mk_stop_all_server();
  * 基础类型参数版本的mk_env_init，为了方便其他语言调用
  * @param thread_num 线程数
  * @param log_level 日志级别,支持0~4
+ * @param log_file_path 文件日志保存路径,路径可以不存在(内部可以创建文件夹)，设置为NULL关闭日志输出至文件
+ * @param log_file_days 文件日志保存天数,设置为0关闭日志文件
  * @param ini_is_path 配置文件是内容还是路径
  * @param ini 配置文件内容或路径，可以为NULL,如果该文件不存在，那么将导出默认配置至该文件
  * @param ssl_is_path ssl证书是内容还是路径
  * @param ssl ssl证书内容或路径，可以为NULL
  * @param ssl_pwd 证书密码，可以为NULL
  */
-API_EXPORT void API_CALL mk_env_init1( int thread_num,
-                                        int log_level,
-                                        int ini_is_path,
-                                        const char *ini,
-                                        int ssl_is_path,
-                                        const char *ssl,
-                                        const char *ssl_pwd);
+API_EXPORT void API_CALL mk_env_init1(int thread_num,
+                                      int log_level,
+                                      const char *log_file_path,
+                                      int log_file_days,
+                                      int ini_is_path,
+                                      const char *ini,
+                                      int ssl_is_path,
+                                      const char *ssl,
+                                      const char *ssl_pwd);
 
 /**
  * 设置配置项
@@ -100,6 +100,13 @@ API_EXPORT void API_CALL mk_env_init1( int thread_num,
  * @param val 配置项值
  */
 API_EXPORT void API_CALL mk_set_option(const char *key, const char *val);
+
+/**
+ * 获取配置项的值
+ * @param key 配置项名
+ */
+API_EXPORT const char * API_CALL mk_get_option(const char *key);
+
 
 /**
  * 创建http[s]服务器

@@ -1,27 +1,11 @@
 ﻿/*
- * MIT License
- *
- * Copyright (c) 2019 xiongziliang <771730766@qq.com>
+ * Copyright (c) 2016 The ZLMediaKit project authors. All Rights Reserved.
  *
  * This file is part of ZLMediaKit(https://github.com/xiongziliang/ZLMediaKit).
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Use of this source code is governed by MIT license that can be found in the
+ * LICENSE file in the root of the source tree. All contributing project authors
+ * may be found in the AUTHORS file in the root of the source tree.
  */
 
 #ifndef MK_PROXY_PLAYER_H_
@@ -67,6 +51,32 @@ API_EXPORT void API_CALL mk_proxy_player_set_option(mk_proxy_player ctx, const c
  * @param url 播放url,支持rtsp/rtmp
  */
 API_EXPORT void API_CALL mk_proxy_player_play(mk_proxy_player ctx, const char *url);
+
+/**
+ * MediaSource.close()回调事件
+ * 在选择关闭一个关联的MediaSource时，将会最终触发到该回调
+ * 你应该通过该事件调用mk_proxy_player_release函数并且释放其他资源
+ * 如果你不调用mk_proxy_player_release函数，那么MediaSource.close()操作将无效
+ * @param user_data 用户数据指针，通过mk_proxy_player_set_on_close函数设置
+ */
+typedef void(API_CALL *on_mk_proxy_player_close)(void *user_data);
+
+/**
+ * 监听MediaSource.close()事件
+ * 在选择关闭一个关联的MediaSource时，将会最终触发到该回调
+ * 你应该通过该事件调用mk_proxy_player_release函数并且释放其他资源
+ * @param ctx 对象指针
+ * @param cb 回调指针
+ * @param user_data 用户数据指针
+ */
+API_EXPORT void API_CALL mk_proxy_player_set_on_close(mk_proxy_player ctx, on_mk_proxy_player_close cb, void *user_data);
+
+/**
+ * 获取总的观看人数
+ * @param ctx 对象指针
+ * @return 观看人数
+ */
+API_EXPORT int API_CALL mk_proxy_player_total_reader_count(mk_proxy_player ctx);
 
 #ifdef __cplusplus
 }

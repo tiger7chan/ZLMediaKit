@@ -1,27 +1,11 @@
 ﻿/*
- * MIT License
- *
- * Copyright (c) 2016-2019 xiongziliang <771730766@qq.com>
+ * Copyright (c) 2016 The ZLMediaKit project authors. All Rights Reserved.
  *
  * This file is part of ZLMediaKit(https://github.com/xiongziliang/ZLMediaKit).
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Use of this source code is governed by MIT license that can be found in the
+ * LICENSE file in the root of the source tree. All contributing project authors
+ * may be found in the AUTHORS file in the root of the source tree.
  */
 
 #include "H265Rtp.h"
@@ -112,7 +96,7 @@ bool H265RtpDecoder::decodeRtp(const RtpPacket::Ptr &rtppack) {
             if (rtppack->sequence != _lastSeq + 1 && rtppack->sequence != 0) {
                 //中间的或末尾的rtp包，其seq必须连续(如果回环了则判定为连续)，否则说明rtp丢包，那么该帧不完整，必须得丢弃
                 _h265frame->_buffer.clear();
-                WarnL << "rtp sequence不连续: " << rtppack->sequence << " != " << _lastSeq << " + 1,该帧被废弃";
+                WarnL << "rtp丢包: " << rtppack->sequence << " != " << _lastSeq << " + 1,该帧被废弃";
                 return false;
             }
 
@@ -143,18 +127,10 @@ bool H265RtpDecoder::decodeRtp(const RtpPacket::Ptr &rtppack) {
 }
 
 void H265RtpDecoder::onGetH265(const H265Frame::Ptr &frame) {
-    //计算dts
-    auto flag = _dts_generator.getDts(frame->_pts,frame->_dts);
-    if(!flag){
-        if(frame->configFrame() || frame->keyFrame()){
-            flag = true;
-            frame->_dts = frame->_pts;
-        }
-    }
-    if(flag){
-        //写入环形缓存
-        RtpCodec::inputFrame(frame);
-    }
+    //rtsp没有dts，那么根据pts排序算法生成dts
+    _dts_generator.getDts(frame->_pts,frame->_dts);
+    //写入环形缓存
+    RtpCodec::inputFrame(frame);
     _h265frame = obtainFrame();
 }
 
@@ -164,12 +140,12 @@ void H265RtpDecoder::onGetH265(const H265Frame::Ptr &frame) {
 H265RtpEncoder::H265RtpEncoder(uint32_t ui32Ssrc,
                                uint32_t ui32MtuSize,
                                uint32_t ui32SampleRate,
-                               uint8_t ui8PlayloadType,
+                               uint8_t ui8PayloadType,
                                uint8_t ui8Interleaved) :
         RtpInfo(ui32Ssrc,
                 ui32MtuSize,
                 ui32SampleRate,
-                ui8PlayloadType,
+                ui8PayloadType,
                 ui8Interleaved) {
 }
 
@@ -190,7 +166,7 @@ void H265RtpEncoder::inputFrame(const Frame::Ptr &frame) {
         bool mark = false;
         int nOffset = 2;
         while (!mark) {
-            if (iLen < nOffset + maxSize) {			//是否拆分结束
+            if (iLen <= nOffset + maxSize) {			//是否拆分结束
                 maxSize = iLen - nOffset;
                 mark = true;
                 //FU end

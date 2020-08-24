@@ -1,27 +1,11 @@
 ﻿/*
- * MIT License
- *
- * Copyright (c) 2016-2019 xiongziliang <771730766@qq.com>
+ * Copyright (c) 2016 The ZLMediaKit project authors. All Rights Reserved.
  *
  * This file is part of ZLMediaKit(https://github.com/xiongziliang/ZLMediaKit).
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Use of this source code is governed by MIT license that can be found in the
+ * LICENSE file in the root of the source tree. All contributing project authors
+ * may be found in the AUTHORS file in the root of the source tree.
  */
 
 #include <sys/stat.h>
@@ -211,6 +195,11 @@ static string searchIndexFile(const string &dir){
 }
 
 static bool makeFolderMenu(const string &httpPath, const string &strFullPath, string &strRet) {
+    GET_CONFIG(bool, dirMenu, Http::kDirMenu);
+    if(!dirMenu){
+        //不允许浏览文件夹
+        return false;
+    }
     string strPathPrefix(strFullPath);
     string last_dir_name;
     if(strPathPrefix.back() == '/'){
@@ -322,9 +311,41 @@ static bool emitHlsPlayed(const Parser &parser, const MediaInfo &mediaInfo, cons
         //cookie有效期为kHlsCookieSecond
         invoker(err,"",kHlsCookieSecond);
     };
-    return NoticeCenter::Instance().emitEvent(Broadcast::kBroadcastMediaPlayed,mediaInfo,mediaAuthInvoker,sender);
+    return NoticeCenter::Instance().emitEvent(Broadcast::kBroadcastMediaPlayed,mediaInfo,mediaAuthInvoker,static_cast<SockInfo &>(sender));
 }
 
+class SockInfoImp : public SockInfo{
+public:
+    typedef std::shared_ptr<SockInfoImp> Ptr;
+    SockInfoImp() = default;
+    ~SockInfoImp() override = default;
+
+    string get_local_ip() override{
+        return _local_ip;
+    }
+
+    uint16_t get_local_port() override{
+        return _local_port;
+    }
+
+    string get_peer_ip() override{
+        return _peer_ip;
+    }
+
+    uint16_t get_peer_port() override{
+        return _peer_port;
+    }
+
+    string getIdentifier() const override{
+        return _identifier;
+    }
+
+    string _local_ip;
+    string _peer_ip;
+    string _identifier;
+    uint16_t _local_port;
+    uint16_t _peer_port;
+};
 
 /**
  * 判断http客户端是否有权限访问文件的逻辑步骤
@@ -341,7 +362,7 @@ static void canAccessPath(TcpSession &sender, const Parser &parser, const MediaI
     auto path = parser.Url();
 
     //先根据http头中的cookie字段获取cookie
-    HttpServerCookie::Ptr cookie = HttpCookieManager::Instance().getCookie(kCookieName, parser.getValues());
+    HttpServerCookie::Ptr cookie = HttpCookieManager::Instance().getCookie(kCookieName, parser.getHeader());
     //如果不是从http头中找到的cookie,我们让http客户端设置下cookie
     bool cookie_from_header = true;
     if (!cookie && !uid.empty()) {
@@ -378,8 +399,16 @@ static void canAccessPath(TcpSession &sender, const Parser &parser, const MediaI
     }
 
     bool is_hls = mediaInfo._schema == HLS_SCHEMA;
+
+    SockInfoImp::Ptr info = std::make_shared<SockInfoImp>();
+    info->_identifier = sender.getIdentifier();
+    info->_peer_ip = sender.get_peer_ip();
+    info->_peer_port = sender.get_peer_port();
+    info->_local_ip = sender.get_local_ip();
+    info->_local_port = sender.get_local_port();
+
     //该用户从来未获取过cookie，这个时候我们广播是否允许该用户访问该http目录
-    HttpSession::HttpAccessPathInvoker accessPathInvoker = [callback, uid, path, is_dir, is_hls, mediaInfo]
+    HttpSession::HttpAccessPathInvoker accessPathInvoker = [callback, uid, path, is_dir, is_hls, mediaInfo, info]
             (const string &errMsg, const string &cookie_path_in, int cookieLifeSecond) {
         HttpServerCookie::Ptr cookie;
         if (cookieLifeSecond) {
@@ -402,7 +431,7 @@ static void canAccessPath(TcpSession &sender, const Parser &parser, const MediaI
             attachment._is_hls = is_hls;
             if(is_hls){
                 //hls相关信息
-                attachment._hls_data = std::make_shared<HlsCookieData>(mediaInfo);
+                attachment._hls_data = std::make_shared<HlsCookieData>(mediaInfo, info);
                 //hls未查找MediaSource
                 attachment._have_find_media_source = false;
             }
@@ -419,7 +448,7 @@ static void canAccessPath(TcpSession &sender, const Parser &parser, const MediaI
     }
 
     //事件未被拦截，则认为是http下载请求
-    bool flag = NoticeCenter::Instance().emitEvent(Broadcast::kBroadcastHttpAccess, parser, path, is_dir, accessPathInvoker, sender);
+    bool flag = NoticeCenter::Instance().emitEvent(Broadcast::kBroadcastHttpAccess, parser, path, is_dir, accessPathInvoker, static_cast<SockInfo &>(sender));
     if (!flag) {
         //此事件无人监听，我们默认都有权限访问
         callback("", nullptr);
@@ -500,7 +529,7 @@ static void accessFile(TcpSession &sender, const Parser &parser, const MediaInfo
                 }
                 cb(codeOut.data(), HttpFileManager::getContentType(strFile.data()), headerOut, body);
             };
-            invoker.responseFile(parser.getValues(), httpHeader, strFile);
+            invoker.responseFile(parser.getHeader(), httpHeader, strFile);
         };
 
         if (!is_hls) {
@@ -533,7 +562,7 @@ static string getFilePath(const Parser &parser,const MediaInfo &mediaInfo, TcpSe
     GET_CONFIG(bool, enableVhost, General::kEnableVhost);
     GET_CONFIG(string, rootPath, Http::kRootPath);
     auto ret = File::absolutePath(enableVhost ? mediaInfo._vhost + parser.Url() : parser.Url(), rootPath);
-    NoticeCenter::Instance().emitEvent(Broadcast::kBroadcastHttpBeforeAccess, parser, ret, sender);
+    NoticeCenter::Instance().emitEvent(Broadcast::kBroadcastHttpBeforeAccess, parser, ret, static_cast<SockInfo &>(sender));
     return std::move(ret);
 }
 

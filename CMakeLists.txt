@@ -39,15 +39,19 @@ set(MediaServer_Root ${CMAKE_CURRENT_SOURCE_DIR}/3rdpart/media-server)
 #设置头文件目录
 INCLUDE_DIRECTORIES(${ToolKit_Root})
 INCLUDE_DIRECTORIES(${MediaKit_Root})
+INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}/3rdpart)
 
-set(ENABLE_HLS true)
-set(ENABLE_OPENSSL true)
-set(ENABLE_MYSQL false)
-set(ENABLE_MP4V2 true)
-set(ENABLE_FAAC false)
-set(ENABLE_X264 false)
-set(ENABLE_MP4RECORD true)
-set(ENABLE_RTPPROXY true)
+option(ENABLE_HLS "Enable HLS" true)
+option(ENABLE_OPENSSL "Enable OpenSSL" true)
+option(ENABLE_MYSQL "Enable MySQL" false)
+option(ENABLE_FAAC "Enable FAAC" false)
+option(ENABLE_X264 "Enable x264" false)
+option(ENABLE_MP4 "Enable MP4" true)
+option(ENABLE_RTPPROXY "Enable RTPPROXY" true)
+option(ENABLE_API "Enable C API SDK" true)
+option(ENABLE_CXX_API "Enable C++ API SDK" false)
+option(ENABLE_TESTS "Enable Tests" true)
+option(ENABLE_SERVER "Enable Server" true)
 
 set(LINK_LIB_LIST zlmediakit zltoolkit)
 
@@ -58,6 +62,8 @@ if (OPENSSL_FOUND AND ENABLE_OPENSSL)
     include_directories(${OPENSSL_INCLUDE_DIR})
     add_definitions(-DENABLE_OPENSSL)
     list(APPEND LINK_LIB_LIST ${OPENSSL_LIBRARIES})
+else()
+    message(WARNING "openssl未找到，rtmp将不支持flash播放器，https/wss/rtsps/rtmps也将失效")
 endif ()
 
 #查找mysql是否安装
@@ -68,15 +74,6 @@ if (MYSQL_FOUND AND ENABLE_MYSQL)
     include_directories(${MYSQL_INCLUDE_DIR}/mysql)
     add_definitions(-DENABLE_MYSQL)
     list(APPEND LINK_LIB_LIST ${MYSQL_LIBRARIES})
-endif ()
-
-#查找MP4V2是否安装
-find_package(MP4V2 QUIET)
-if (MP4V2_FOUND AND ENABLE_MP4V2)
-    include_directories(${MP4V2_INCLUDE_DIR})
-    list(APPEND LINK_LIB_LIST ${MP4V2_LIBRARY})
-    add_definitions(-DENABLE_MP4V2)
-    message(STATUS "found library:${MP4V2_LIBRARY},ENABLE_MP4V2 defined")
 endif ()
 
 #查找x264是否安装
@@ -114,12 +111,13 @@ if(ENABLE_HLS)
     message(STATUS "ENABLE_HLS defined")
     add_definitions(-DENABLE_HLS)
 
+    include_directories(${MediaServer_Root}/libmpeg/include)
     aux_source_directory(${MediaServer_Root}/libmpeg/include src_mpeg)
     aux_source_directory(${MediaServer_Root}/libmpeg/source src_mpeg)
-    include_directories(${MediaServer_Root}/libmpeg/include)
 
     add_library(mpeg STATIC ${src_mpeg})
     list(APPEND LINK_LIB_LIST mpeg)
+    list(APPEND CXX_API_TARGETS mpeg)
 
 	if(WIN32)
 		set_target_properties(mpeg PROPERTIES COMPILE_FLAGS  ${VS_FALGS} )
@@ -127,21 +125,23 @@ if(ENABLE_HLS)
 endif()
 
 #添加mov、flv库用于MP4录制
-if(ENABLE_MP4RECORD)
-    message(STATUS "ENABLE_MP4RECORD defined")
-    add_definitions(-DENABLE_MP4RECORD)
+if(ENABLE_MP4)
+    message(STATUS "ENABLE_MP4 defined")
+    add_definitions(-DENABLE_MP4)
+
+    include_directories(${MediaServer_Root}/libmov/include)
+    include_directories(${MediaServer_Root}/libflv/include)
 
     aux_source_directory(${MediaServer_Root}/libmov/include src_mov)
     aux_source_directory(${MediaServer_Root}/libmov/source src_mov)	
-	include_directories(${MediaServer_Root}/libmov/include)
 
     aux_source_directory(${MediaServer_Root}/libflv/include src_flv)
     aux_source_directory(${MediaServer_Root}/libflv/source src_flv)	
-	include_directories(${MediaServer_Root}/libflv/include)
 
     add_library(mov STATIC ${src_mov})
 	add_library(flv STATIC ${src_flv})
     list(APPEND LINK_LIB_LIST mov flv)
+    list(APPEND CXX_API_TARGETS mov flv)
 
 	if(WIN32)
 		set_target_properties(mov flv PROPERTIES COMPILE_FLAGS  ${VS_FALGS} )
@@ -151,13 +151,15 @@ endif()
 #添加rtp库用于rtp转ps/ts
 if(ENABLE_RTPPROXY AND ENABLE_HLS)
     message(STATUS "ENABLE_RTPPROXY defined")
+    include_directories(${MediaServer_Root}/librtp/include)
+
     aux_source_directory(${MediaServer_Root}/librtp/include src_rtp)
     aux_source_directory(${MediaServer_Root}/librtp/source src_rtp)
     aux_source_directory(${MediaServer_Root}/librtp/payload src_rtp)
-    include_directories(${MediaServer_Root}/librtp/include)
     add_library(rtp STATIC ${src_rtp})
     add_definitions(-DENABLE_RTPPROXY)
     list(APPEND LINK_LIB_LIST rtp)
+    list(APPEND CXX_API_TARGETS rtp)
 endif()
 
 #收集源代码
@@ -179,6 +181,23 @@ endif ()
 #添加库
 add_library(zltoolkit STATIC ${ToolKit_src_list})
 add_library(zlmediakit STATIC ${MediaKit_src_list})
+list(APPEND CXX_API_TARGETS zltoolkit zlmediakit)
+
+#安装目录
+if (WIN32)
+    set(INSTALL_PATH_LIB $ENV{HOME}/${CMAKE_PROJECT_NAME}/lib)
+    set(INSTALL_PATH_INCLUDE $ENV{HOME}/${CMAKE_PROJECT_NAME}/include)
+else ()
+    set(INSTALL_PATH_LIB lib)
+    set(INSTALL_PATH_INCLUDE include)
+endif ()
+
+if(ENABLE_CXX_API)
+    # 保留目录结构
+    install(DIRECTORY ${ToolKit_Root}/  DESTINATION ${INSTALL_PATH_INCLUDE}/ZLToolKit  REGEX "(.*[.](md|cpp)|win32)$" EXCLUDE)
+    install(DIRECTORY ${MediaKit_Root}/ DESTINATION ${INSTALL_PATH_INCLUDE}/ZLMediaKit REGEX ".*[.](md|cpp)$" EXCLUDE)
+    install(TARGETS ${CXX_API_TARGETS} DESTINATION ${INSTALL_PATH_LIB})
+endif()
 
 if (WIN32)
     list(APPEND LINK_LIB_LIST WS2_32 Iphlpapi shlwapi)
@@ -193,11 +212,17 @@ execute_process(COMMAND cp -r ${CMAKE_CURRENT_SOURCE_DIR}/www ${EXECUTABLE_OUTPU
 execute_process(COMMAND cp ${CMAKE_CURRENT_SOURCE_DIR}/conf/config.ini ${EXECUTABLE_OUTPUT_PATH}/)
 
 #添加c库
-add_subdirectory(api)
+if(ENABLE_API)
+    add_subdirectory(api)
+endif()
 
 if (NOT IOS)
     #测试程序
-    add_subdirectory(tests)
+    if(ENABLE_TESTS)
+        add_subdirectory(tests)
+    endif()
     #主服务器
-    add_subdirectory(server)
+    if(ENABLE_SERVER)
+        add_subdirectory(server)
+    endif()
 endif ()

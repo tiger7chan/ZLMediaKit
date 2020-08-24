@@ -1,33 +1,24 @@
 ﻿/*
- * MIT License
- *
- * Copyright (c) 2019 Gemfield <gemfield@civilnet.cn>
+ * Copyright (c) 2016 The ZLMediaKit project authors. All Rights Reserved.
  *
  * This file is part of ZLMediaKit(https://github.com/xiongziliang/ZLMediaKit).
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Use of this source code is governed by MIT license that can be found in the
+ * LICENSE file in the root of the source tree. All contributing project authors
+ * may be found in the AUTHORS file in the root of the source tree.
  */
 
 #if defined(ENABLE_RTPPROXY)
 #include "RtpSession.h"
 #include "RtpSelector.h"
+#include "Network/TcpServer.h"
 namespace mediakit{
+
+const string RtpSession::kStreamID = "stream_id";
+
+void RtpSession::attachServer(const TcpServer &server) {
+    _stream_id = const_cast<TcpServer &>(server)[kStreamID];
+}
 
 RtpSession::RtpSession(const Socket::Ptr &sock) : TcpSession(sock) {
     DebugP(this);
@@ -36,8 +27,8 @@ RtpSession::RtpSession(const Socket::Ptr &sock) : TcpSession(sock) {
 }
 RtpSession::~RtpSession() {
     DebugP(this);
-    if(_ssrc){
-        RtpSelector::Instance().delProcess(_ssrc,_process.get());
+    if(_process){
+        RtpSelector::Instance().delProcess(_stream_id,_process.get());
     }
 }
 
@@ -52,7 +43,7 @@ void RtpSession::onRecv(const Buffer::Ptr &data) {
 }
 
 void RtpSession::onError(const SockException &err) {
-    WarnL << _ssrc << " " << err.what();
+    WarnL << _stream_id << " " << err.what();
 }
 
 void RtpSession::onManager() {
@@ -66,12 +57,36 @@ void RtpSession::onManager() {
 }
 
 void RtpSession::onRtpPacket(const char *data, uint64_t len) {
-    if(!_ssrc){
-        _ssrc = RtpSelector::getSSRC(data + 2,len - 2);
-        _process = RtpSelector::Instance().getProcess(_ssrc, true);
+    if (!_process) {
+        uint32_t ssrc;
+        if (!RtpSelector::getSSRC(data + 2, len - 2, ssrc)) {
+            return;
+        }
+        if (_stream_id.empty()) {
+            //未指定流id就使用ssrc为流id
+            _stream_id = printSSRC(ssrc);
+        }
+        //tcp情况下，一个tcp链接只可能是一路流，不需要通过多个ssrc来区分，所以不需要频繁getProcess
+        _process = RtpSelector::Instance().getProcess(_stream_id, true);
+        _process->setListener(dynamic_pointer_cast<RtpSession>(shared_from_this()));
     }
-    _process->inputRtp(data + 2,len - 2,&addr);
+    _process->inputRtp(_sock, data + 2, len - 2, &addr);
     _ticker.resetTime();
+}
+
+bool RtpSession::close(MediaSource &sender, bool force) {
+    //此回调在其他线程触发
+    if(!_process || (!force && _process->totalReaderCount())){
+        return false;
+    }
+    string err = StrPrinter << "close media:" << sender.getSchema() << "/" << sender.getVhost() << "/" << sender.getApp() << "/" << sender.getId() << " " << force;
+    safeShutdown(SockException(Err_shutdown,err));
+    return true;
+}
+
+int RtpSession::totalReaderCount(MediaSource &sender) {
+    //此回调在其他线程触发
+    return _process ? _process->totalReaderCount() : sender.totalReaderCount();
 }
 
 }//namespace mediakit

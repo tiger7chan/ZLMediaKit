@@ -1,27 +1,11 @@
 ﻿/*
- * MIT License
- *
- * Copyright (c) 2016-2019 xiongziliang <771730766@qq.com>
+ * Copyright (c) 2016 The ZLMediaKit project authors. All Rights Reserved.
  *
  * This file is part of ZLMediaKit(https://github.com/xiongziliang/ZLMediaKit).
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Use of this source code is governed by MIT license that can be found in the
+ * LICENSE file in the root of the source tree. All contributing project authors
+ * may be found in the AUTHORS file in the root of the source tree.
  */
 
 #ifndef ZLMEDIAKIT_WEBSOCKETSESSION_H
@@ -94,7 +78,6 @@ public:
     }
 };
 
-
 /**
 * 通过该模板类可以透明化WebSocket协议，
 * 用户只要实现WebSock协议下的具体业务协议，譬如基于WebSocket协议的Rtmp协议等
@@ -123,8 +106,9 @@ public:
 
     void attachServer(const TcpServer &server) override{
         HttpSessionType::attachServer(server);
-        _weakServer = const_cast<TcpServer &>(server).shared_from_this();
+        _weak_server = const_cast<TcpServer &>(server).shared_from_this();
     }
+
 protected:
     /**
      * websocket客户端连接上事件
@@ -138,7 +122,7 @@ protected:
             //此url不允许创建websocket连接
             return false;
         }
-        auto strongServer = _weakServer.lock();
+        auto strongServer = _weak_server.lock();
         if(strongServer){
             _session->attachServer(*strongServer);
         }
@@ -161,24 +145,20 @@ protected:
         //允许websocket客户端
         return true;
     }
+
     /**
      * 开始收到一个webSocket数据包
-     * @param packet
      */
     void onWebSocketDecodeHeader(const WebSocketHeader &packet) override{
         //新包，原来的包残余数据清空掉
-        _remian_data.clear();
+        _payload_section.clear();
     }
 
     /**
      * 收到websocket数据包负载
-     * @param packet
-     * @param ptr
-     * @param len
-     * @param recved
      */
-    void onWebSocketDecodePlayload(const WebSocketHeader &packet,const uint8_t *ptr,uint64_t len,uint64_t recved) override {
-        _remian_data.append((char *)ptr,len);
+    void onWebSocketDecodePayload(const WebSocketHeader &packet,const uint8_t *ptr,uint64_t len,uint64_t recved) override {
+        _payload_section.append((char *)ptr,len);
     }
 
     /**
@@ -193,39 +173,60 @@ protected:
         switch (header._opcode){
             case WebSocketHeader::CLOSE:{
                 HttpSessionType::encode(header,nullptr);
-            }
+                HttpSessionType::shutdown(SockException(Err_shutdown, "recv close request from client"));
                 break;
+            }
+            
             case WebSocketHeader::PING:{
                 header._opcode = WebSocketHeader::PONG;
-                HttpSessionType::encode(header,std::make_shared<BufferString>(_remian_data));
-            }
+                HttpSessionType::encode(header,std::make_shared<BufferString>(_payload_section));
                 break;
-            case WebSocketHeader::CONTINUATION:{
-
             }
-                break;
+            
+            case WebSocketHeader::CONTINUATION:
             case WebSocketHeader::TEXT:
             case WebSocketHeader::BINARY:{
-                _session->onRecv(std::make_shared<BufferString>(_remian_data));
+                if (!header._fin) {
+                    //还有后续分片数据, 我们先缓存数据，所有分片收集完成才一次性输出
+                    _payload_cache.append(std::move(_payload_section));
+                    if (_payload_cache.size() < MAX_WS_PACKET) {
+                        //还有内存容量缓存分片数据
+                        break;
+                    }
+                    //分片缓存太大，需要清空
+                }
+
+                //最后一个包
+                if (_payload_cache.empty()) {
+                    //这个包是唯一个分片
+                    _session->onRecv(std::make_shared<WebSocketBuffer>(header._opcode, header._fin, std::move(_payload_section)));
+                    break;
+                }
+
+                //这个包由多个分片组成
+                _payload_cache.append(std::move(_payload_section));
+                _session->onRecv(std::make_shared<WebSocketBuffer>(header._opcode, header._fin, std::move(_payload_cache)));
+                _payload_cache.clear();
+                break;
             }
-                break;
-            default:
-                break;
+            
+            default: break;
         }
-        _remian_data.clear();
+        _payload_section.clear();
         header._mask_flag = flag;
     }
 
     /**
-    * 发送数据进行websocket协议打包后回调
-    * @param buffer
+     * 发送数据进行websocket协议打包后回调
     */
     void onWebSocketEncodeData(const Buffer::Ptr &buffer) override{
-        SocketHelper::send(buffer);
+        HttpSessionType::send(buffer);
     }
+
 private:
-    string _remian_data;
-    weak_ptr<TcpServer> _weakServer;
+    string _payload_cache;
+    string _payload_section;
+    weak_ptr<TcpServer> _weak_server;
     TcpSession::Ptr _session;
     Creator _creator;
 };

@@ -1,39 +1,23 @@
 ﻿/*
- * MIT License
- *
- * Copyright (c) 2016-2019 xiongziliang <771730766@qq.com>
+ * Copyright (c) 2016 The ZLMediaKit project authors. All Rights Reserved.
  *
  * This file is part of ZLMediaKit(https://github.com/xiongziliang/ZLMediaKit).
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Use of this source code is governed by MIT license that can be found in the
+ * LICENSE file in the root of the source tree. All contributing project authors
+ * may be found in the AUTHORS file in the root of the source tree.
  */
+
 #include <signal.h>
 #include "Util/util.h"
 #include "Util/logger.h"
 #include <iostream>
-#include "Poller/EventPoller.h"
 #include "Rtsp/UDPServer.h"
 #include "Player/MediaPlayer.h"
 #include "Util/onceToken.h"
-#include "H264Decoder.h"
+#include "FFMpegDecoder.h"
 #include "YuvDisplayer.h"
-#include "Network/sockutil.h"
+#include "Extension/H265.h"
 
 using namespace std;
 using namespace toolkit;
@@ -125,37 +109,35 @@ int main(int argc, char *argv[]) {
             return;
         }
 
-        auto viedoTrack = strongPlayer->getTrack(TrackVideo);
-        if (!viedoTrack || viedoTrack->getCodecId() != CodecH264) {
-            WarnL << "没有视频或者视频不是264编码!";
+        auto viedoTrack = strongPlayer->getTrack(TrackVideo, false);
+        if (!viedoTrack) {
+            WarnL << "没有视频!";
             return;
         }
 
         AnyStorage::Ptr storage(new AnyStorage);
-        viedoTrack->addDelegate(std::make_shared<FrameWriterInterfaceHelper>([storage](const Frame::Ptr &frame) {
+        viedoTrack->addDelegate(std::make_shared<FrameWriterInterfaceHelper>([storage](const Frame::Ptr &frame_in) {
+            auto frame = Frame::getCacheAbleFrame(frame_in);
             SDLDisplayerHelper::Instance().doTask([frame,storage]() {
                 auto &decoder = (*storage)["decoder"];
                 auto &displayer = (*storage)["displayer"];
                 auto &merger = (*storage)["merger"];
                 if(!decoder){
-                    decoder.set<H264Decoder>();
+                    decoder.set<FFMpegDecoder>(frame->getCodecId());
                 }
                 if(!displayer){
                     displayer.set<YuvDisplayer>(nullptr,url);
                 }
                 if(!merger){
                     merger.set<FrameMerger>();
-                };
-
+                }
                 merger.get<FrameMerger>().inputFrame(frame,[&](uint32_t dts,uint32_t pts,const Buffer::Ptr &buffer){
                     AVFrame *pFrame = nullptr;
-                    bool flag = decoder.get<H264Decoder>().inputVideo((unsigned char *) buffer->data(), buffer->size(), dts, &pFrame);
+                    bool flag = decoder.get<FFMpegDecoder>().inputVideo((unsigned char *) buffer->data(), buffer->size(), dts, &pFrame);
                     if (flag) {
                         displayer.get<YuvDisplayer>().displayYUV(pFrame);
                     }
                 });
-
-
                 return true;
             });
         }));

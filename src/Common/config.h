@@ -1,27 +1,11 @@
 ﻿/*
- * MIT License
- *
- * Copyright (c) 2016-2019 xiongziliang <771730766@qq.com>
+ * Copyright (c) 2016 The ZLMediaKit project authors. All Rights Reserved.
  *
  * This file is part of ZLMediaKit(https://github.com/xiongziliang/ZLMediaKit).
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Use of this source code is governed by MIT license that can be found in the
+ * LICENSE file in the root of the source tree. All contributing project authors
+ * may be found in the AUTHORS file in the root of the source tree.
  */
 
 
@@ -57,7 +41,7 @@ bool loadIniConfig(const char *ini_path = nullptr);
 #define CLEAR_ARR(arr) for(auto &item : arr){ item = 0;}
 #endif //CLEAR_ARR
 
-#define SERVER_NAME "ZLMediaKit-4.0"
+#define SERVER_NAME "ZLMediaKit-5.0(build in " __DATE__ " " __TIME__ ")"
 #define VHOST_KEY "vhost"
 #define HTTP_SCHEMA "http"
 #define RTSP_SCHEMA "rtsp"
@@ -72,35 +56,31 @@ namespace Broadcast {
 extern const string kBroadcastMediaChanged;
 #define BroadcastMediaChangedArgs const bool &bRegist, MediaSource &sender
 
-//MediaSource重置Track事件
-extern const string kBroadcastMediaResetTracks;
-#define BroadcastMediaResetTracksArgs MediaSource &sender
-
 //录制mp4文件成功后广播
 extern const string kBroadcastRecordMP4;
 #define BroadcastRecordMP4Args const MP4Info &info
 
 //收到http api请求广播
 extern const string kBroadcastHttpRequest;
-#define BroadcastHttpRequestArgs const Parser &parser,const HttpSession::HttpResponseInvoker &invoker,bool &consumed,TcpSession &sender
+#define BroadcastHttpRequestArgs const Parser &parser,const HttpSession::HttpResponseInvoker &invoker,bool &consumed,SockInfo &sender
 
 //在http文件服务器中,收到http访问文件或目录的广播,通过该事件控制访问http目录的权限
 extern const string kBroadcastHttpAccess;
-#define BroadcastHttpAccessArgs const Parser &parser,const string &path,const bool &is_dir,const HttpSession::HttpAccessPathInvoker &invoker,TcpSession &sender
+#define BroadcastHttpAccessArgs const Parser &parser,const string &path,const bool &is_dir,const HttpSession::HttpAccessPathInvoker &invoker,SockInfo &sender
 
 //在http文件服务器中,收到http访问文件或目录前的广播,通过该事件可以控制http url到文件路径的映射
 //在该事件中通过自行覆盖path参数，可以做到譬如根据虚拟主机或者app选择不同http根目录的目的
 extern const string kBroadcastHttpBeforeAccess;
-#define BroadcastHttpBeforeAccessArgs const Parser &parser,string &path,TcpSession &sender
+#define BroadcastHttpBeforeAccessArgs const Parser &parser,string &path,SockInfo &sender
 
 //该流是否需要认证？是的话调用invoker并传入realm,否则传入空的realm.如果该事件不监听则不认证
 extern const string kBroadcastOnGetRtspRealm;
-#define BroadcastOnGetRtspRealmArgs const MediaInfo &args,const RtspSession::onGetRealm &invoker,TcpSession &sender
+#define BroadcastOnGetRtspRealmArgs const MediaInfo &args,const RtspSession::onGetRealm &invoker,SockInfo &sender
 
 //请求认证用户密码事件，user_name为用户名，must_no_encrypt如果为true，则必须提供明文密码(因为此时是base64认证方式),否则会导致认证失败
 //获取到密码后请调用invoker并输入对应类型的密码和密码类型，invoker执行时会匹配密码
 extern const string kBroadcastOnRtspAuth;
-#define BroadcastOnRtspAuthArgs const MediaInfo &args,const string &realm,const string &user_name,const bool &must_no_encrypt,const RtspSession::onAuth &invoker,TcpSession &sender
+#define BroadcastOnRtspAuthArgs const MediaInfo &args,const string &realm,const string &user_name,const bool &must_no_encrypt,const RtspSession::onAuth &invoker,SockInfo &sender
 
 //推流鉴权结果回调对象
 //如果errMessage为空则代表鉴权成功
@@ -111,7 +91,7 @@ typedef std::function<void(const string &errMessage,bool enableRtxp,bool enableH
 
 //收到rtsp/rtmp推流事件广播，通过该事件控制推流鉴权
 extern const string kBroadcastMediaPublish;
-#define BroadcastMediaPublishArgs const MediaInfo &args,const Broadcast::PublishAuthInvoker &invoker,TcpSession &sender
+#define BroadcastMediaPublishArgs const MediaInfo &args,const Broadcast::PublishAuthInvoker &invoker,SockInfo &sender
 
 //播放鉴权结果回调对象
 //如果errMessage为空则代表鉴权成功
@@ -119,19 +99,19 @@ typedef std::function<void(const string &errMessage)> AuthInvoker;
 
 //播放rtsp/rtmp/http-flv事件广播，通过该事件控制播放鉴权
 extern const string kBroadcastMediaPlayed;
-#define BroadcastMediaPlayedArgs const MediaInfo &args,const Broadcast::AuthInvoker &invoker,TcpSession &sender
+#define BroadcastMediaPlayedArgs const MediaInfo &args,const Broadcast::AuthInvoker &invoker,SockInfo &sender
 
 //shell登录鉴权
 extern const string kBroadcastShellLogin;
-#define BroadcastShellLoginArgs const string &user_name,const string &passwd,const Broadcast::AuthInvoker &invoker,TcpSession &sender
+#define BroadcastShellLoginArgs const string &user_name,const string &passwd,const Broadcast::AuthInvoker &invoker,SockInfo &sender
 
 //停止rtsp/rtmp/http-flv会话后流量汇报事件广播
 extern const string kBroadcastFlowReport;
-#define BroadcastFlowReportArgs const MediaInfo &args,const uint64_t &totalBytes,const uint64_t &totalDuration,const bool &isPlayer
+#define BroadcastFlowReportArgs const MediaInfo &args,const uint64_t &totalBytes,const uint64_t &totalDuration,const bool &isPlayer, SockInfo &sender
 
 //未找到流后会广播该事件，请在监听该事件后去拉流或其他方式产生流，这样就能按需拉流了
 extern const string kBroadcastNotFoundStream;
-#define BroadcastNotFoundStreamArgs const MediaInfo &args,TcpSession &sender
+#define BroadcastNotFoundStreamArgs const MediaInfo &args,SockInfo &sender, const function<void()> &closePlayer
 
 //某个流无人消费时触发，目的为了实现无人观看时主动断开拉流等业务逻辑
 extern const string kBroadcastStreamNoneReader;
@@ -180,8 +160,6 @@ extern const string kStreamNoneReaderDelayMS;
 extern const string kMaxStreamWaitTimeMS;
 //是否启动虚拟主机
 extern const string kEnableVhost;
-//超低延时模式，默认打开，打开后会降低延时但是转发性能会稍差
-extern const string kUltraLowDelay;
 //拉流代理时是否添加静音音频
 extern const string kAddMuteAudio;
 //拉流代理时如果断流再重连成功是否删除前一次的媒体流数据，如果删除将重新开始，
@@ -193,6 +171,11 @@ extern const string kPublishToRtxp ;
 extern const string kPublishToHls ;
 //是否默认推流时mp4录像，hook接口(on_publish)中可以覆盖该设置
 extern const string kPublishToMP4 ;
+//合并写缓存大小(单位毫秒)，合并写指服务器缓存一定的数据后才会一次性写入socket，这样能提高性能，但是会提高延时
+//开启后会同时关闭TCP_NODELAY并开启MSG_MORE
+extern const string kMergeWriteMS ;
+//全局的时间戳覆盖开关，在转协议时，对frame进行时间戳覆盖
+extern const string kModifyStamp;
 }//namespace General
 
 
@@ -210,6 +193,8 @@ extern const string kCharSet;
 extern const string kRootPath;
 //http 404错误提示内容
 extern const string kNotFound;
+//是否显示文件夹菜单
+extern const string kDirMenu;
 }//namespace Http
 
 ////////////SHELL配置///////////
@@ -236,6 +221,7 @@ extern const string kDirectProxy;
 
 ////////////RTMP服务器配置///////////
 namespace Rtmp {
+//rtmp推流时间戳覆盖开关
 extern const string kModifyStamp;
 //握手超时时间，默认15秒
 extern const string kHandshakeSecond;
@@ -306,8 +292,6 @@ namespace RtpProxy {
 extern const string kDumpDir;
 //是否限制udp数据来源ip和端口
 extern const string kCheckSource;
-//rtp类型，支持MP2P/MP4V-ES
-extern const string kRtpType;
 //rtp接收超时时间
 extern const string kTimeoutSec;
 } //namespace RtpProxy
@@ -337,6 +321,8 @@ extern const string kMediaTimeoutMS;
 extern const string kBeatIntervalMS;
 //Track编码格式探测最大时间，单位毫秒，默认2000
 extern const string kMaxAnalysisMS;
+//是否为性能测试模式，性能测试模式开启后不会解析rtp或rtmp包
+extern const string kBenchmarkMode;
 }
 }  // namespace mediakit
 

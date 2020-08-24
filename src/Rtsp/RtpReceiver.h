@@ -1,27 +1,11 @@
 ﻿/*
- * MIT License
- *
- * Copyright (c) 2016-2019 xiongziliang <771730766@qq.com>
+ * Copyright (c) 2016 The ZLMediaKit project authors. All Rights Reserved.
  *
  * This file is part of ZLMediaKit(https://github.com/xiongziliang/ZLMediaKit).
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Use of this source code is governed by MIT license that can be found in the
+ * LICENSE file in the root of the source tree. All contributing project authors
+ * may be found in the AUTHORS file in the root of the source tree.
  */
 
 #ifndef ZLMEDIAKIT_RTPRECEIVER_H
@@ -48,12 +32,13 @@ protected:
     /**
      * 输入数据指针生成并排序rtp包
      * @param track_index track下标索引
-     * @param track  sdp track相关信息
+     * @param type track类型
+     * @param samplerate rtp时间戳基准时钟，视频为90000，音频为采样率
      * @param rtp_raw_ptr rtp数据指针
      * @param rtp_raw_len rtp数据指针长度
      * @return 解析成功返回true
      */
-    bool handleOneRtp(int track_index,SdpTrack::Ptr &track, unsigned char *rtp_raw_ptr, unsigned int rtp_raw_len);
+    bool handleOneRtp(int track_index, TrackType type, int samplerate, unsigned char *rtp_raw_ptr, unsigned int rtp_raw_len);
 
     /**
      * rtp数据包排序后输出
@@ -65,9 +50,12 @@ protected:
     void setPoolSize(int size);
     int getJitterSize(int track_index);
     int getCycleCount(int track_index);
+
 private:
     void sortRtp(const RtpPacket::Ptr &rtp , int track_index);
+
 private:
+    uint32_t _ssrc[2] = { 0, 0 };
     //ssrc不匹配计数
     uint32_t _ssrc_err_count[2] = { 0, 0 };
     //上次seq

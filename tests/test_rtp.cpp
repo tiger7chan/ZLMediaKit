@@ -1,27 +1,11 @@
-/*
- * MIT License
- *
- * Copyright (c) 2019 Gemfield <gemfield@civilnet.cn>
+﻿/*
+ * Copyright (c) 2016 The ZLMediaKit project authors. All Rights Reserved.
  *
  * This file is part of ZLMediaKit(https://github.com/xiongziliang/ZLMediaKit).
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Use of this source code is governed by MIT license that can be found in the
+ * LICENSE file in the root of the source tree. All contributing project authors
+ * may be found in the AUTHORS file in the root of the source tree.
  */
 
 #include <map>
@@ -71,10 +55,10 @@ static bool loadFile(const char *path){
         }
 
         uint32_t timeStamp;
-        RtpSelector::Instance().inputRtp(rtp,len, &addr,&timeStamp);
+        RtpSelector::Instance().inputRtp(nullptr, rtp, len, &addr, &timeStamp);
         if(timeStamp_last){
             auto diff = timeStamp - timeStamp_last;
-            if(diff > 0){
+            if(diff > 0 && diff < 500){
                 usleep(diff * 1000);
             }
         }
@@ -98,12 +82,13 @@ int main(int argc,char *argv[]) {
     rtspSrv->start<RtspSession>(554);//默认554
     rtmpSrv->start<RtmpSession>(1935);//默认1935
     httpSrv->start<HttpSession>(80);//默认80
-    //此处可以选择MP4V-ES或MP2P
-    mINI::Instance()[RtpProxy::kRtpType] = "MP4V-ES";
     //此处选择是否导出调试文件
 //    mINI::Instance()[RtpProxy::kDumpDir] = "/Users/xzl/Desktop/";
 
-    loadFile(argv[1]);
+    if (argc == 2)
+      loadFile(argv[1]);
+    else
+      ErrorL << "parameter error.";
 #else
     ErrorL << "please ENABLE_RTPPROXY and then test";
 #endif//#if defined(ENABLE_RTPPROXY)

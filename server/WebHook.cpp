@@ -1,27 +1,11 @@
 ﻿/*
- * MIT License
- *
- * Copyright (c) 2016-2019 xiongziliang <771730766@qq.com>
+ * Copyright (c) 2016 The ZLMediaKit project authors. All Rights Reserved.
  *
  * This file is part of ZLMediaKit(https://github.com/xiongziliang/ZLMediaKit).
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Use of this source code is governed by MIT license that can be found in the
+ * LICENSE file in the root of the source tree. All contributing project authors
+ * may be found in the AUTHORS file in the root of the source tree.
  */
 
 #include <sstream>
@@ -269,13 +253,16 @@ void installWebHook(){
     });
 
     NoticeCenter::Instance().addListener(nullptr,Broadcast::kBroadcastFlowReport,[](BroadcastFlowReportArgs){
-        if(!hook_enable || args._param_strs == hook_adminparams || hook_flowreport.empty()){
+        if(!hook_enable || args._param_strs == hook_adminparams || hook_flowreport.empty() || sender.get_peer_ip() == "127.0.0.1"){
             return;
         }
         auto body = make_json(args);
         body["totalBytes"] = (Json::UInt64)totalBytes;
         body["duration"] = (Json::UInt64)totalDuration;
         body["player"] = isPlayer;
+        body["ip"] = sender.get_peer_ip();
+        body["port"] = sender.get_peer_port();
+        body["id"] = sender.getIdentifier();
         //执行hook
         do_http_hook(hook_flowreport,body, nullptr);
     });
@@ -349,6 +336,7 @@ void installWebHook(){
     //监听播放失败(未找到特定的流)事件
     NoticeCenter::Instance().addListener(nullptr,Broadcast::kBroadcastNotFoundStream,[](BroadcastNotFoundStreamArgs){
         if(!hook_enable || hook_stream_not_found.empty()){
+//            closePlayer();
             return;
         }
         auto body = make_json(args);
@@ -359,7 +347,7 @@ void installWebHook(){
         do_http_hook(hook_stream_not_found,body, nullptr);
     });
 
-#ifdef ENABLE_MP4RECORD
+#ifdef ENABLE_MP4
     //录制mp4文件成功后广播
     NoticeCenter::Instance().addListener(nullptr,Broadcast::kBroadcastRecordMP4,[](BroadcastRecordMP4Args){
         if(!hook_enable || hook_record_mp4.empty()){
@@ -379,7 +367,7 @@ void installWebHook(){
         //执行hook
         do_http_hook(hook_record_mp4,body, nullptr);
     });
-#endif //ENABLE_MP4RECORD
+#endif //ENABLE_MP4
 
     NoticeCenter::Instance().addListener(nullptr,Broadcast::kBroadcastShellLogin,[](BroadcastShellLoginArgs){
         if(!hook_enable || hook_shell_login.empty() || sender.get_peer_ip() == "127.0.0.1"){
@@ -457,7 +445,7 @@ void installWebHook(){
         body["path"] = path;
         body["is_dir"] = is_dir;
         body["params"] = parser.Params();
-        for(auto &pr : parser.getValues()){
+        for(auto &pr : parser.getHeader()){
             body[string("header.") + pr.first] = pr.second;
         }
         //执行hook

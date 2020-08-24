@@ -1,27 +1,11 @@
 ﻿/*
- * MIT License
- *
- * Copyright (c) 2016-2019 xiongziliang <771730766@qq.com>
+ * Copyright (c) 2016 The ZLMediaKit project authors. All Rights Reserved.
  *
  * This file is part of ZLMediaKit(https://github.com/xiongziliang/ZLMediaKit).
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Use of this source code is governed by MIT license that can be found in the
+ * LICENSE file in the root of the source tree. All contributing project authors
+ * may be found in the AUTHORS file in the root of the source tree.
  */
 
 #include "Frame.h"
@@ -31,6 +15,55 @@ using namespace toolkit;
 
 namespace mediakit{
 
+/**
+ * 该对象的功能是把一个不可缓存的帧转换成可缓存的帧
+ */
+class FrameCacheAble : public FrameFromPtr {
+public:
+    typedef std::shared_ptr<FrameCacheAble> Ptr;
+
+    FrameCacheAble(const Frame::Ptr &frame){
+        if(frame->cacheAble()){
+            _frame = frame;
+            _ptr = frame->data();
+        }else{
+            _buffer = std::make_shared<BufferRaw>();
+            _buffer->assign(frame->data(),frame->size());
+            _ptr = _buffer->data();
+        }
+        _size = frame->size();
+        _dts = frame->dts();
+        _pts = frame->pts();
+        _prefix_size = frame->prefixSize();
+        _codec_id = frame->getCodecId();
+        _key = frame->keyFrame();
+        _config = frame->configFrame();
+    }
+
+    ~FrameCacheAble() override = default;
+
+    /**
+     * 可以被缓存
+     */
+    bool cacheAble() const override {
+        return true;
+    }
+
+    bool keyFrame() const override{
+        return _key;
+    }
+
+    bool configFrame() const override{
+        return _config;
+    }
+
+private:
+    Frame::Ptr _frame;
+    BufferRaw::Ptr _buffer;
+    bool _key;
+    bool _config;
+};
+
 Frame::Ptr Frame::getCacheAbleFrame(const Frame::Ptr &frame){
     if(frame->cacheAble()){
         return frame;
@@ -38,5 +71,36 @@ Frame::Ptr Frame::getCacheAbleFrame(const Frame::Ptr &frame){
     return std::make_shared<FrameCacheAble>(frame);
 }
 
-}//namespace mediakit
+#define SWITCH_CASE(codec_id) case codec_id : return #codec_id
+const char *getCodecName(CodecId codecId) {
+    switch (codecId) {
+        SWITCH_CASE(CodecH264);
+        SWITCH_CASE(CodecH265);
+        SWITCH_CASE(CodecAAC);
+        SWITCH_CASE(CodecG711A);
+        SWITCH_CASE(CodecG711U);
+        SWITCH_CASE(CodecOpus);
+        default : return "unknown codec";
+    }
+}
 
+TrackType getTrackType(CodecId codecId){
+    switch (codecId){
+        case CodecH264:
+        case CodecH265: return TrackVideo;
+        case CodecAAC:
+        case CodecG711A:
+        case CodecG711U:
+        case CodecOpus: return TrackAudio;
+        default: return TrackInvalid;
+    }
+}
+
+const char *CodecInfo::getCodecName() {
+    return mediakit::getCodecName(getCodecId());
+}
+
+TrackType CodecInfo::getTrackType() {
+    return mediakit::getTrackType(getCodecId());
+}
+}//namespace mediakit

@@ -1,27 +1,11 @@
 ﻿/*
- * MIT License
- *
- * Copyright (c) 2019 xiongziliang <771730766@qq.com>
+ * Copyright (c) 2016 The ZLMediaKit project authors. All Rights Reserved.
  *
  * This file is part of ZLMediaKit(https://github.com/xiongziliang/ZLMediaKit).
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Use of this source code is governed by MIT license that can be found in the
+ * LICENSE file in the root of the source tree. All contributing project authors
+ * may be found in the AUTHORS file in the root of the source tree.
  */
 
 #ifndef MK_UTIL_H
@@ -45,20 +29,20 @@ API_EXPORT char* API_CALL mk_util_get_exe_path();
  * @param relative_path 同目录下文件的路径相对,可以为null
  * @return 文件路径，使用完后需要自己free
  */
-API_EXPORT char* API_CALL mk_uitl_get_exe_dir(const char *relative_path);
+API_EXPORT char* API_CALL mk_util_get_exe_dir(const char *relative_path);
 
 /**
  * 获取unix标准的系统时间戳
  * @return 当前系统时间戳
  */
-API_EXPORT uint64_t API_CALL mk_uitl_get_current_millisecond();
+API_EXPORT uint64_t API_CALL mk_util_get_current_millisecond();
 
 /**
  * 获取时间字符串
  * @param fmt 时间格式，譬如%Y-%m-%d %H:%M:%S
  * @return 时间字符串，使用完后需要自己free
  */
-API_EXPORT char* API_CALL mk_uitl_get_current_time_string(const char *fmt);
+API_EXPORT char* API_CALL mk_util_get_current_time_string(const char *fmt);
 
 /**
  * 打印二进制为字符串
@@ -66,7 +50,7 @@ API_EXPORT char* API_CALL mk_uitl_get_current_time_string(const char *fmt);
  * @param len 数据长度
  * @return 可打印的调试信息，使用完后需要自己free
  */
-API_EXPORT char* API_CALL mk_uitl_hex_dump(const void *buf, int len);
+API_EXPORT char* API_CALL mk_util_hex_dump(const void *buf, int len);
 ///////////////////////////////////////////日志/////////////////////////////////////////////
 
 /**

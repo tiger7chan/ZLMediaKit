@@ -1,28 +1,13 @@
 ﻿/*
- * MIT License
- *
- * Copyright (c) 2016-2019 xiongziliang <771730766@qq.com>
+ * Copyright (c) 2016 The ZLMediaKit project authors. All Rights Reserved.
  *
  * This file is part of ZLMediaKit(https://github.com/xiongziliang/ZLMediaKit).
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Use of this source code is governed by MIT license that can be found in the
+ * LICENSE file in the root of the source tree. All contributing project authors
+ * may be found in the AUTHORS file in the root of the source tree.
  */
+
 #include "Rtmp.h"
 #include "Extension/Factory.h"
 namespace mediakit{
@@ -51,11 +36,95 @@ AudioMeta::AudioMeta(const AudioTrack::Ptr &audio,int datarate){
         _metadata.set("audiosamplesize", audio->getAudioSampleBit());
     }
     if(audio->getAudioChannel() > 0){
-        _metadata.set("audiochannels", audio->getAudioChannel());
         _metadata.set("stereo", audio->getAudioChannel() > 1);
     }
     _codecId = audio->getCodecId();
     _metadata.set("audiocodecid", Factory::getAmfByCodecId(_codecId));
 }
 
+uint8_t getAudioRtmpFlags(const Track::Ptr &track){
+    switch (track->getTrackType()){
+        case TrackAudio : {
+            auto audioTrack = dynamic_pointer_cast<AudioTrack>(track);
+            if (!audioTrack) {
+                WarnL << "获取AudioTrack失败";
+                return 0;
+            }
+            auto iSampleRate = audioTrack->getAudioSampleRate();
+            auto iChannel = audioTrack->getAudioChannel();
+            auto iSampleBit = audioTrack->getAudioSampleBit();
+
+            uint8_t flvAudioType ;
+            switch (track->getCodecId()){
+                case CodecG711A : flvAudioType = FLV_CODEC_G711A; break;
+                case CodecG711U : flvAudioType = FLV_CODEC_G711U; break;
+                case CodecOpus : {
+                    flvAudioType = FLV_CODEC_OPUS;
+                    //opus不通过flags获取音频相关信息
+                    iSampleRate = 44100;
+                    iSampleBit = 16;
+                    iChannel = 2;
+                    break;
+                }
+                case CodecAAC : {
+                    flvAudioType = FLV_CODEC_AAC;
+                    //aac不通过flags获取音频相关信息
+                    iSampleRate = 44100;
+                    iSampleBit = 16;
+                    iChannel = 2;
+                    break;
+                }
+                default: WarnL << "该编码格式不支持转换为RTMP: " << track->getCodecName(); return 0;
+            }
+
+            uint8_t flvSampleRate;
+            switch (iSampleRate) {
+                case 44100:
+                    flvSampleRate = 3;
+                    break;
+                case 22050:
+                    flvSampleRate = 2;
+                    break;
+                case 11025:
+                    flvSampleRate = 1;
+                    break;
+                case 16000: // nellymoser only
+                case 8000: // nellymoser only
+                case 5512: // not MP3
+                    flvSampleRate = 0;
+                    break;
+                default:
+                    WarnL << "FLV does not support sample rate " << iSampleRate << " ,choose from (44100, 22050, 11025)";
+                    return 0;
+            }
+
+            uint8_t flvStereoOrMono = (iChannel > 1);
+            uint8_t flvSampleBit = iSampleBit == 16;
+            return (flvAudioType << 4) | (flvSampleRate << 2) | (flvSampleBit << 1) | flvStereoOrMono;
+        }
+
+        default : return 0;
+    }
+}
+
+
+void Metadata::addTrack(AMFValue &metadata, const Track::Ptr &track) {
+    Metadata::Ptr new_metadata;
+    switch (track->getTrackType()) {
+        case TrackVideo: {
+            new_metadata = std::make_shared<VideoMeta>(dynamic_pointer_cast<VideoTrack>(track));
+        }
+            break;
+        case TrackAudio: {
+            new_metadata = std::make_shared<AudioMeta>(dynamic_pointer_cast<AudioTrack>(track));
+        }
+            break;
+        default:
+            return;
+    }
+
+    new_metadata->getMetadata().object_for_each([&](const std::string &key, const AMFValue &value) {
+        metadata.set(key, value);
+    });
+}
 }//namespace mediakit

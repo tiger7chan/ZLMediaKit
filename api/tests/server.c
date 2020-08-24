@@ -1,27 +1,11 @@
 ﻿/*
- * MIT License
- *
- * Copyright (c) 2019 xiongziliang <771730766@qq.com>
+ * Copyright (c) 2016 The ZLMediaKit project authors. All Rights Reserved.
  *
  * This file is part of ZLMediaKit(https://github.com/xiongziliang/ZLMediaKit).
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Use of this source code is governed by MIT license that can be found in the
+ * LICENSE file in the root of the source tree. All contributing project authors
+ * may be found in the AUTHORS file in the root of the source tree.
  */
 
 #include <signal.h>
@@ -62,14 +46,15 @@ void API_CALL on_mk_media_changed(int regist,
  */
 void API_CALL on_mk_media_publish(const mk_media_info url_info,
                                   const mk_publish_auth_invoker invoker,
-                                  const mk_tcp_session sender) {
+                                  const mk_sock_info sender) {
+    char ip[64];
     log_printf(LOG_LEV,
                "client info, local: %s:%d, peer: %s:%d\n"
                "%s/%s/%s/%s, url params: %s",
-               mk_tcp_session_local_ip(sender),
-               mk_tcp_session_local_port(sender),
-               mk_tcp_session_peer_ip(sender),
-               mk_tcp_session_peer_port(sender),
+               mk_sock_info_local_ip(sender,ip),
+               mk_sock_info_local_port(sender),
+               mk_sock_info_peer_ip(sender,ip + 32),
+               mk_sock_info_peer_port(sender),
                mk_media_info_get_schema(url_info),
                mk_media_info_get_vhost(url_info),
                mk_media_info_get_app(url_info),
@@ -89,15 +74,16 @@ void API_CALL on_mk_media_publish(const mk_media_info url_info,
  */
 void API_CALL on_mk_media_play(const mk_media_info url_info,
                                const mk_auth_invoker invoker,
-                               const mk_tcp_session sender) {
+                               const mk_sock_info sender) {
 
+    char ip[64];
     log_printf(LOG_LEV,
                "client info, local: %s:%d, peer: %s:%d\n"
                "%s/%s/%s/%s, url params: %s",
-               mk_tcp_session_local_ip(sender),
-               mk_tcp_session_local_port(sender),
-               mk_tcp_session_peer_ip(sender),
-               mk_tcp_session_peer_port(sender),
+               mk_sock_info_local_ip(sender,ip),
+               mk_sock_info_local_port(sender),
+               mk_sock_info_peer_ip(sender,ip + 32),
+               mk_sock_info_peer_port(sender),
                mk_media_info_get_schema(url_info),
                mk_media_info_get_vhost(url_info),
                mk_media_info_get_app(url_info),
@@ -114,14 +100,15 @@ void API_CALL on_mk_media_play(const mk_media_info url_info,
  * @param sender 播放客户端相关信息
  */
 void API_CALL on_mk_media_not_found(const mk_media_info url_info,
-                                    const mk_tcp_session sender) {
+                                    const mk_sock_info sender) {
+    char ip[64];
     log_printf(LOG_LEV,
                "client info, local: %s:%d, peer: %s:%d\n"
                "%s/%s/%s/%s, url params: %s",
-               mk_tcp_session_local_ip(sender),
-               mk_tcp_session_local_port(sender),
-               mk_tcp_session_peer_ip(sender),
-               mk_tcp_session_peer_port(sender),
+               mk_sock_info_local_ip(sender,ip),
+               mk_sock_info_local_port(sender),
+               mk_sock_info_peer_ip(sender,ip + 32),
+               mk_sock_info_peer_port(sender),
                mk_media_info_get_schema(url_info),
                mk_media_info_get_vhost(url_info),
                mk_media_info_get_app(url_info),
@@ -153,17 +140,18 @@ void API_CALL on_mk_media_no_reader(const mk_media_source sender) {
 void API_CALL on_mk_http_request(const mk_parser parser,
                                  const mk_http_response_invoker invoker,
                                  int *consumed,
-                                 const mk_tcp_session sender) {
+                                 const mk_sock_info sender) {
 
+    char ip[64];
     log_printf(LOG_LEV,
                "client info, local: %s:%d, peer: %s:%d\n"
                "%s %s?%s %s\n"
                "User-Agent: %s\n"
                "%s",
-               mk_tcp_session_local_ip(sender),
-               mk_tcp_session_local_port(sender),
-               mk_tcp_session_peer_ip(sender),
-               mk_tcp_session_peer_port(sender),
+               mk_sock_info_local_ip(sender,ip),
+               mk_sock_info_local_port(sender),
+               mk_sock_info_peer_ip(sender,ip + 32),
+               mk_sock_info_peer_port(sender),
                mk_parser_get_method(parser),
                mk_parser_get_url(parser),
                mk_parser_get_url_params(parser),
@@ -207,17 +195,18 @@ void API_CALL on_mk_http_access(const mk_parser parser,
                                 const char *path,
                                 int is_dir,
                                 const mk_http_access_path_invoker invoker,
-                                mk_tcp_session sender) {
+                                const mk_sock_info sender) {
 
+    char ip[64];
     log_printf(LOG_LEV,
                "client info, local: %s:%d, peer: %s:%d, path: %s ,is_dir: %d\n"
                "%s %s?%s %s\n"
                "User-Agent: %s\n"
                "%s",
-               mk_tcp_session_local_ip(sender),
-               mk_tcp_session_local_port(sender),
-               mk_tcp_session_peer_ip(sender),
-               mk_tcp_session_peer_port(sender),
+               mk_sock_info_local_ip(sender, ip),
+               mk_sock_info_local_port(sender),
+               mk_sock_info_peer_ip(sender, ip + 32),
+               mk_sock_info_peer_port(sender),
                path,(int)is_dir,
                mk_parser_get_method(parser),
                mk_parser_get_url(parser),
@@ -239,16 +228,18 @@ void API_CALL on_mk_http_access(const mk_parser parser,
  */
 void API_CALL on_mk_http_before_access(const mk_parser parser,
                                        char *path,
-                                       const mk_tcp_session sender) {
+                                       const mk_sock_info sender) {
+
+    char ip[64];
     log_printf(LOG_LEV,
                "client info, local: %s:%d, peer: %s:%d, path: %s\n"
                "%s %s?%s %s\n"
                "User-Agent: %s\n"
                "%s",
-               mk_tcp_session_local_ip(sender),
-               mk_tcp_session_local_port(sender),
-               mk_tcp_session_peer_ip(sender),
-               mk_tcp_session_peer_port(sender),
+               mk_sock_info_local_ip(sender,ip),
+               mk_sock_info_local_port(sender),
+               mk_sock_info_peer_ip(sender,ip + 32),
+               mk_sock_info_peer_port(sender),
                path,
                mk_parser_get_method(parser),
                mk_parser_get_url(parser),
@@ -267,14 +258,15 @@ void API_CALL on_mk_http_before_access(const mk_parser parser,
  */
 void API_CALL on_mk_rtsp_get_realm(const mk_media_info url_info,
                                    const mk_rtsp_get_realm_invoker invoker,
-                                   const mk_tcp_session sender) {
+                                   const mk_sock_info sender) {
+    char ip[64];
     log_printf(LOG_LEV,
                "client info, local: %s:%d, peer: %s:%d\n"
                "%s/%s/%s/%s, url params: %s",
-               mk_tcp_session_local_ip(sender),
-               mk_tcp_session_local_port(sender),
-               mk_tcp_session_peer_ip(sender),
-               mk_tcp_session_peer_port(sender),
+               mk_sock_info_local_ip(sender,ip),
+               mk_sock_info_local_port(sender),
+               mk_sock_info_peer_ip(sender,ip + 32),
+               mk_sock_info_peer_port(sender),
                mk_media_info_get_schema(url_info),
                mk_media_info_get_vhost(url_info),
                mk_media_info_get_app(url_info),
@@ -300,16 +292,17 @@ void API_CALL on_mk_rtsp_auth(const mk_media_info url_info,
                               const char *user_name,
                               int must_no_encrypt,
                               const mk_rtsp_auth_invoker invoker,
-                              const mk_tcp_session sender) {
+                              const mk_sock_info sender) {
 
+    char ip[64];
     log_printf(LOG_LEV,
                "client info, local: %s:%d, peer: %s:%d\n"
                "%s/%s/%s/%s, url params: %s\n"
                "realm: %s, user_name: %s, must_no_encrypt: %d",
-               mk_tcp_session_local_ip(sender),
-               mk_tcp_session_local_port(sender),
-               mk_tcp_session_peer_ip(sender),
-               mk_tcp_session_peer_port(sender),
+               mk_sock_info_local_ip(sender,ip),
+               mk_sock_info_local_port(sender),
+               mk_sock_info_peer_ip(sender,ip + 32),
+               mk_sock_info_peer_port(sender),
                mk_media_info_get_schema(url_info),
                mk_media_info_get_vhost(url_info),
                mk_media_info_get_app(url_info),
@@ -354,13 +347,15 @@ void API_CALL on_mk_record_mp4(const mk_mp4_info mp4) {
 void API_CALL on_mk_shell_login(const char *user_name,
                                 const char *passwd,
                                 const mk_auth_invoker invoker,
-                                const mk_tcp_session sender) {
+                                const mk_sock_info sender) {
+
+    char ip[64];
     log_printf(LOG_LEV,"client info, local: %s:%d, peer: %s:%d\n"
               "user_name: %s, passwd: %s",
-              mk_tcp_session_local_ip(sender),
-              mk_tcp_session_local_port(sender),
-              mk_tcp_session_peer_ip(sender),
-              mk_tcp_session_peer_port(sender),
+              mk_sock_info_local_ip(sender,ip),
+              mk_sock_info_local_port(sender),
+              mk_sock_info_peer_ip(sender,ip + 32),
+              mk_sock_info_peer_port(sender),
               user_name, passwd);
     //允许登录shell
     mk_auth_invoker_do(invoker, NULL);
@@ -372,19 +367,27 @@ void API_CALL on_mk_shell_login(const char *user_name,
  * @param total_bytes 耗费上下行总流量，单位字节数
  * @param total_seconds 本次tcp会话时长，单位秒
  * @param is_player 客户端是否为播放器
+ * @param peer_ip 客户端ip
+ * @param peer_port 客户端端口号
  */
 void API_CALL on_mk_flow_report(const mk_media_info url_info,
                                 uint64_t total_bytes,
                                 uint64_t total_seconds,
-                                int is_player) {
+                                int is_player,
+                                const mk_sock_info sender) {
+    char ip[64];
     log_printf(LOG_LEV,"%s/%s/%s/%s, url params: %s,"
-              "total_bytes: %d, total_seconds: %d, is_player: %d",
+              "total_bytes: %d, total_seconds: %d, is_player: %d, peer_ip:%s, peer_port:%d",
                mk_media_info_get_schema(url_info),
                mk_media_info_get_vhost(url_info),
                mk_media_info_get_app(url_info),
                mk_media_info_get_stream(url_info),
                mk_media_info_get_params(url_info),
-              (int)total_bytes, (int)total_seconds, (int)is_player);
+              (int)total_bytes,
+              (int)total_seconds,
+              (int)is_player,
+              mk_sock_info_peer_ip(sender,ip),
+              (int)mk_sock_info_peer_port(sender));
 }
 
 static int flag = 1;
@@ -392,13 +395,15 @@ static void s_on_exit(int sig){
     flag = 0;
 }
 int main(int argc, char *argv[]) {
-    char *ini_path = mk_uitl_get_exe_dir("c_api.ini");
-    char *ssl_path = mk_uitl_get_exe_dir("ssl.p12");
+    char *ini_path = mk_util_get_exe_dir("c_api.ini");
+    char *ssl_path = mk_util_get_exe_dir("ssl.p12");
 
     mk_config config = {
             .ini = ini_path,
             .ini_is_path = 1,
             .log_level = 0,
+            .log_file_path = NULL,
+            .log_file_days = 0,
             .ssl = ssl_path,
             .ssl_is_path = 1,
             .ssl_pwd = NULL,

@@ -1,27 +1,11 @@
 ﻿/*
- * MIT License
- *
- * Copyright (c) 2019 Gemfield <gemfield@civilnet.cn>
+ * Copyright (c) 2016 The ZLMediaKit project authors. All Rights Reserved.
  *
  * This file is part of ZLMediaKit(https://github.com/xiongziliang/ZLMediaKit).
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Use of this source code is governed by MIT license that can be found in the
+ * LICENSE file in the root of the source tree. All contributing project authors
+ * may be found in the AUTHORS file in the root of the source tree.
  */
 
 #ifndef ZLMEDIAKIT_RTPPROCESS_H
@@ -31,49 +15,84 @@
 
 #include "Rtsp/RtpReceiver.h"
 #include "RtpDecoder.h"
-#include "PSDecoder.h"
+#include "Decoder.h"
 #include "Common/Device.h"
 #include "Common/Stamp.h"
+#include "Http/HttpRequestSplitter.h"
 using namespace mediakit;
 
 namespace mediakit{
 
-string printSSRC(uint32_t ui32Ssrc);
-class FrameMerger;
-class RtpProcess : public RtpReceiver , public RtpDecoder , public PSDecoder {
+class RtpProcess : public HttpRequestSplitter, public RtpReceiver , public RtpDecoder, public SockInfo, public MediaSinkInterface, public std::enable_shared_from_this<RtpProcess>{
 public:
     typedef std::shared_ptr<RtpProcess> Ptr;
-    RtpProcess(uint32_t ssrc);
+    RtpProcess(const string &stream_id);
     ~RtpProcess();
-    bool inputRtp(const char *data,int data_len, const struct sockaddr *addr , uint32_t *dts_out = nullptr);
+
+    /**
+     * 输入rtp
+     * @param sock 本地监听的socket
+     * @param data rtp数据指针
+     * @param data_len rtp数据长度
+     * @param addr 数据源地址
+     * @param dts_out 解析出最新的dts
+     * @return 是否解析成功
+     */
+    bool inputRtp(const Socket::Ptr &sock, const char *data,int data_len, const struct sockaddr *addr , uint32_t *dts_out = nullptr);
+
+    /**
+     * 是否超时，用于超时移除对象
+     */
     bool alive();
-    string get_peer_ip();
-    uint16_t get_peer_port();
+
+    /**
+     * 超时时被RtpSelector移除时触发
+     */
+    void onDetach();
+
+    /**
+     * 设置onDetach事件回调
+     */
+    void setOnDetach(const function<void()> &cb);
+
+    /// SockInfo override
+    string get_local_ip() override;
+    uint16_t get_local_port() override;
+    string get_peer_ip() override;
+    uint16_t get_peer_port() override;
+    string getIdentifier() const override;
+
+    int totalReaderCount();
+    void setListener(const std::weak_ptr<MediaSourceEvent> &listener);
+
 protected:
     void onRtpSorted(const RtpPacket::Ptr &rtp, int track_index) override ;
-    void onRtpDecode(const void *packet, int bytes, uint32_t timestamp, int flags) override;
-    void onPSDecode(int stream,
-                    int codecid,
-                    int flags,
-                    int64_t pts,
-                    int64_t dts,
-                    const void *data,
-                    int bytes) override ;
+    void onRtpDecode(const uint8_t *packet, int bytes, uint32_t timestamp, int flags) override;
+    void inputFrame(const Frame::Ptr &frame) override;
+    void addTrack(const Track::Ptr & track) override;
+    void resetTracks() override {};
+
+    const char *onSearchPacketTail(const char *data,int len) override;
+    int64_t onRecvHeader(const char *data,uint64_t len) override { return 0; };
+
+private:
+    void emitOnPublish();
+
 private:
     std::shared_ptr<FILE> _save_file_rtp;
     std::shared_ptr<FILE> _save_file_ps;
     std::shared_ptr<FILE> _save_file_video;
-    uint32_t _ssrc;
-    SdpTrack::Ptr _track;
     struct sockaddr *_addr = nullptr;
     uint16_t _sequence = 0;
-    int _codecid_video = 0;
-    int _codecid_audio = 0;
     MultiMediaSourceMuxer::Ptr _muxer;
-    std::shared_ptr<FrameMerger> _merger;
     Ticker _last_rtp_time;
-    map<int,Stamp> _stamps;
     uint32_t _dts = 0;
+    DecoderImp::Ptr _decoder;
+    std::weak_ptr<MediaSourceEvent> _listener;
+    MediaInfo _media_info;
+    uint64_t _total_bytes = 0;
+    Socket::Ptr _sock;
+    function<void()> _on_detach;
 };
 
 }//namespace mediakit

@@ -1,27 +1,11 @@
 ﻿/*
- * MIT License
- *
- * Copyright (c) 2019 xiongziliang <771730766@qq.com>
+ * Copyright (c) 2016 The ZLMediaKit project authors. All Rights Reserved.
  *
  * This file is part of ZLMediaKit(https://github.com/xiongziliang/ZLMediaKit).
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Use of this source code is governed by MIT license that can be found in the
+ * LICENSE file in the root of the source tree. All contributing project authors
+ * may be found in the AUTHORS file in the root of the source tree.
  */
 
 #ifndef MK_TCP_H
@@ -33,19 +17,41 @@
 extern "C" {
 #endif
 
+///////////////////////////////////////////SockInfo/////////////////////////////////////////////
+//SockInfo对象的C映射
+typedef void* mk_sock_info;
+
+//SockInfo::get_peer_ip()
+API_EXPORT const char* API_CALL mk_sock_info_peer_ip(const mk_sock_info ctx, char *buf);
+//SockInfo::get_local_ip()
+API_EXPORT const char* API_CALL mk_sock_info_local_ip(const mk_sock_info ctx, char *buf);
+//SockInfo::get_peer_port()
+API_EXPORT uint16_t API_CALL mk_sock_info_peer_port(const mk_sock_info ctx);
+//SockInfo::get_local_port()
+API_EXPORT uint16_t API_CALL mk_sock_info_local_port(const mk_sock_info ctx);
+
+#ifndef SOCK_INFO_API_RENAME
+#define SOCK_INFO_API_RENAME
+//mk_tcp_session对象转换成mk_sock_info对象后再获取网络相关信息
+#define mk_tcp_session_peer_ip(x,buf) mk_sock_info_peer_ip(mk_tcp_session_get_sock_info(x),buf)
+#define mk_tcp_session_local_ip(x,buf) mk_sock_info_local_ip(mk_tcp_session_get_sock_info(x),buf)
+#define mk_tcp_session_peer_port(x) mk_sock_info_peer_port(mk_tcp_session_get_sock_info(x))
+#define mk_tcp_session_local_port(x) mk_sock_info_local_port(mk_tcp_session_get_sock_info(x))
+
+//mk_tcp_client对象转换成mk_sock_info对象后再获取网络相关信息
+#define mk_tcp_client_peer_ip(x,buf) mk_sock_info_peer_ip(mk_tcp_client_get_sock_info(x),buf)
+#define mk_tcp_client_local_ip(x,buf) mk_sock_info_local_ip(mk_tcp_client_get_sock_info(x),buf)
+#define mk_tcp_client_peer_port(x) mk_sock_info_peer_port(mk_tcp_client_get_sock_info(x))
+#define mk_tcp_client_local_port(x) mk_sock_info_local_port(mk_tcp_client_get_sock_info(x))
+#endif
 ///////////////////////////////////////////TcpSession/////////////////////////////////////////////
 //TcpSession对象的C映射
 typedef void* mk_tcp_session;
+//获取基类指针以便获取其网络相关信息
+API_EXPORT mk_sock_info API_CALL mk_tcp_session_get_sock_info(const mk_tcp_session ctx);
+
 //TcpSession::safeShutdown()
 API_EXPORT void API_CALL mk_tcp_session_shutdown(const mk_tcp_session ctx,int err,const char *err_msg);
-//TcpSession::get_peer_ip()
-API_EXPORT const char* API_CALL mk_tcp_session_peer_ip(const mk_tcp_session ctx);
-//TcpSession::get_local_ip()
-API_EXPORT const char* API_CALL mk_tcp_session_local_ip(const mk_tcp_session ctx);
-//TcpSession::get_peer_port()
-API_EXPORT uint16_t API_CALL mk_tcp_session_peer_port(const mk_tcp_session ctx);
-//TcpSession::get_local_port()
-API_EXPORT uint16_t API_CALL mk_tcp_session_local_port(const mk_tcp_session ctx);
 //TcpSession::send()
 API_EXPORT void API_CALL mk_tcp_session_send(const mk_tcp_session ctx,const char *data,int len);
 //切换到该对象所在线程后再TcpSession::send()
@@ -120,7 +126,7 @@ API_EXPORT void* API_CALL mk_tcp_session_get_user_data(mk_tcp_session session);
  * @param port 监听端口号，0则为随机
  * @param type 服务器类型
  */
-API_EXPORT uint16_t API_CALL mk_tcp_server_server_start(uint16_t port, mk_tcp_type type);
+API_EXPORT uint16_t API_CALL mk_tcp_server_start(uint16_t port, mk_tcp_type type);
 
 /**
  * 监听tcp服务器事件
@@ -131,6 +137,8 @@ API_EXPORT void API_CALL mk_tcp_server_events_listen(const mk_tcp_session_events
 ///////////////////////////////////////////自定义tcp客户端/////////////////////////////////////////////
 
 typedef void* mk_tcp_client;
+//获取基类指针以便获取其网络相关信息
+API_EXPORT mk_sock_info API_CALL mk_tcp_client_get_sock_info(const mk_tcp_client ctx);
 
 typedef struct {
     /**

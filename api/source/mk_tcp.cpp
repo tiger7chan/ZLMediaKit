@@ -1,68 +1,63 @@
 ﻿/*
- * MIT License
- *
- * Copyright (c) 2019 xiongziliang <771730766@qq.com>
+ * Copyright (c) 2016 The ZLMediaKit project authors. All Rights Reserved.
  *
  * This file is part of ZLMediaKit(https://github.com/xiongziliang/ZLMediaKit).
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Use of this source code is governed by MIT license that can be found in the
+ * LICENSE file in the root of the source tree. All contributing project authors
+ * may be found in the AUTHORS file in the root of the source tree.
  */
 
+#include "string.h"
 #include "mk_tcp.h"
 #include "mk_tcp_private.h"
 #include "Http/WebSocketClient.h"
 #include "Http/WebSocketSession.h"
 using namespace mediakit;
 
+API_EXPORT const char* API_CALL mk_sock_info_peer_ip(const mk_sock_info ctx, char *buf){
+    assert(ctx);
+    SockInfo *sock = (SockInfo *)ctx;
+    strcpy(buf,sock->get_peer_ip().c_str());
+    return buf;
+}
+API_EXPORT const char* API_CALL mk_sock_info_local_ip(const mk_sock_info ctx, char *buf){
+    assert(ctx);
+    SockInfo *sock = (SockInfo *)ctx;
+    strcpy(buf,sock->get_peer_ip().c_str());
+    return buf;
+}
+API_EXPORT uint16_t API_CALL mk_sock_info_peer_port(const mk_sock_info ctx){
+    assert(ctx);
+    SockInfo *sock = (SockInfo *)ctx;
+    return sock->get_peer_port();
+}
+API_EXPORT uint16_t API_CALL mk_sock_info_local_port(const mk_sock_info ctx){
+    assert(ctx);
+    SockInfo *sock = (SockInfo *)ctx;
+    return sock->get_local_port();
+}
+
 ////////////////////////////////////////////////////////////////////////////////////////
+API_EXPORT mk_sock_info API_CALL mk_tcp_session_get_sock_info(const mk_tcp_session ctx){
+    assert(ctx);
+    TcpSessionForC *session = (TcpSessionForC *)ctx;
+    return (SockInfo *)session;
+}
+
 API_EXPORT void API_CALL mk_tcp_session_shutdown(const mk_tcp_session ctx,int err,const char *err_msg){
     assert(ctx);
-    TcpSession *session = (TcpSession *)ctx;
+    TcpSessionForC *session = (TcpSessionForC *)ctx;
     session->safeShutdown(SockException((ErrCode)err,err_msg));
 }
-API_EXPORT const char* API_CALL mk_tcp_session_peer_ip(const mk_tcp_session ctx){
-    assert(ctx);
-    TcpSession *session = (TcpSession *)ctx;
-    return session->get_peer_ip().c_str();
-}
-API_EXPORT const char* API_CALL mk_tcp_session_local_ip(const mk_tcp_session ctx){
-    assert(ctx);
-    TcpSession *session = (TcpSession *)ctx;
-    return session->get_local_ip().c_str();
-}
-API_EXPORT uint16_t API_CALL mk_tcp_session_peer_port(const mk_tcp_session ctx){
-    assert(ctx);
-    TcpSession *session = (TcpSession *)ctx;
-    return session->get_peer_port();
-}
-API_EXPORT uint16_t API_CALL mk_tcp_session_local_port(const mk_tcp_session ctx){
-    assert(ctx);
-    TcpSession *session = (TcpSession *)ctx;
-    return session->get_local_port();
-}
+
 API_EXPORT void API_CALL mk_tcp_session_send(const mk_tcp_session ctx,const char *data,int len){
     assert(ctx && data);
     if(!len){
         len = strlen(data);
     }
-    TcpSession *session = (TcpSession *)ctx;
-    session->send(data,len);
+    TcpSessionForC *session = (TcpSessionForC *)ctx;
+    session->SockSender::send(data,len);
 }
 
 API_EXPORT void API_CALL mk_tcp_session_send_safe(const mk_tcp_session ctx,const char *data,int len){
@@ -71,12 +66,12 @@ API_EXPORT void API_CALL mk_tcp_session_send_safe(const mk_tcp_session ctx,const
         len = strlen(data);
     }
     try {
-        weak_ptr<TcpSession> weak_session = ((TcpSession *)ctx)->shared_from_this();
+        weak_ptr<TcpSession> weak_session = ((TcpSessionForC *)ctx)->shared_from_this();
         string str = string(data,len);
-        ((TcpSession *)ctx)->async([weak_session,str](){
+        ((TcpSessionForC *)ctx)->async([weak_session,str](){
             auto session_session = weak_session.lock();
             if(session_session){
-                session_session->send(str);
+                session_session->SockSender::send(str);
             }
         });
     }catch (std::exception &ex){
@@ -137,7 +132,7 @@ API_EXPORT void API_CALL mk_tcp_server_events_listen(const mk_tcp_session_events
     }
 }
 
-API_EXPORT uint16_t API_CALL mk_tcp_server_server_start(uint16_t port, mk_tcp_type type){
+API_EXPORT uint16_t API_CALL mk_tcp_server_start(uint16_t port, mk_tcp_type type){
     type = MAX(mk_type_tcp, MIN(type, mk_type_wss));
     try {
         s_tcp_server[type] = std::make_shared<TcpServer>();
@@ -149,10 +144,12 @@ API_EXPORT uint16_t API_CALL mk_tcp_server_server_start(uint16_t port, mk_tcp_ty
                 s_tcp_server[type]->start<TcpSessionWithSSL<TcpSessionForC> >(port);
                 break;
             case mk_type_ws:
-                s_tcp_server[type]->start<WebSocketSession<TcpSessionForC, HttpSession>>(port);
+                //此处你也可以修改WebSocketHeader::BINARY
+                s_tcp_server[type]->start<WebSocketSession<TcpSessionForC, HttpSession, WebSocketHeader::TEXT> >(port);
                 break;
             case mk_type_wss:
-                s_tcp_server[type]->start<WebSocketSession<TcpSessionForC, HttpsSession>>(port);
+                //此处你也可以修改WebSocketHeader::BINARY
+                s_tcp_server[type]->start<WebSocketSession<TcpSessionForC, HttpsSession, WebSocketHeader::TEXT> >(port);
                 break;
             default:
                 return 0;
@@ -213,12 +210,20 @@ TcpClientForC::Ptr *mk_tcp_client_create_l(mk_tcp_client_events *events, mk_tcp_
         case mk_type_ssl:
             return (TcpClientForC::Ptr *)new shared_ptr<TcpSessionWithSSL<TcpClientForC> >(new TcpSessionWithSSL<TcpClientForC>(events));
         case mk_type_ws:
+            //此处你也可以修改WebSocketHeader::BINARY
             return (TcpClientForC::Ptr *)new shared_ptr<WebSocketClient<TcpClientForC, WebSocketHeader::TEXT, false> >(new WebSocketClient<TcpClientForC, WebSocketHeader::TEXT, false>(events));
         case mk_type_wss:
+            //此处你也可以修改WebSocketHeader::BINARY
             return (TcpClientForC::Ptr *)new shared_ptr<WebSocketClient<TcpClientForC, WebSocketHeader::TEXT, true> >(new WebSocketClient<TcpClientForC, WebSocketHeader::TEXT, true>(events));
         default:
             return nullptr;
     }
+}
+
+API_EXPORT mk_sock_info API_CALL mk_tcp_client_get_sock_info(const mk_tcp_client ctx){
+    assert(ctx);
+    TcpClientForC::Ptr *client = (TcpClientForC::Ptr *)ctx;
+    return (SockInfo *)client->get();
 }
 
 API_EXPORT mk_tcp_client API_CALL mk_tcp_client_create(mk_tcp_client_events *events, mk_tcp_type type){
@@ -229,25 +234,25 @@ API_EXPORT mk_tcp_client API_CALL mk_tcp_client_create(mk_tcp_client_events *eve
 
 API_EXPORT void API_CALL mk_tcp_client_release(mk_tcp_client ctx){
     assert(ctx);
-    TcpClient::Ptr *client = (TcpClient::Ptr *)ctx;
+    TcpClientForC::Ptr *client = (TcpClientForC::Ptr *)ctx;
     delete client;
 }
 
 API_EXPORT void API_CALL mk_tcp_client_connect(mk_tcp_client ctx, const char *host, uint16_t port, float time_out_sec){
     assert(ctx);
-    TcpClient::Ptr *client = (TcpClient::Ptr *)ctx;
+    TcpClientForC::Ptr *client = (TcpClientForC::Ptr *)ctx;
     (*client)->startConnect(host,port);
 }
 
 API_EXPORT void API_CALL mk_tcp_client_send(mk_tcp_client ctx, const char *data, int len){
     assert(ctx && data);
-    TcpClient::Ptr *client = (TcpClient::Ptr *)ctx;
-    (*client)->send(data,len);
+    TcpClientForC::Ptr *client = (TcpClientForC::Ptr *)ctx;
+    (*client)->SockSender::send(data,len);
 }
 
 API_EXPORT void API_CALL mk_tcp_client_send_safe(mk_tcp_client ctx, const char *data, int len){
     assert(ctx && data);
-    TcpClient::Ptr *client = (TcpClient::Ptr *)ctx;
+    TcpClientForC::Ptr *client = (TcpClientForC::Ptr *)ctx;
     weak_ptr<TcpClient> weakClient = *client;
     Buffer::Ptr buf = (*client)->obtainBuffer(data,len);
     (*client)->async([weakClient,buf](){

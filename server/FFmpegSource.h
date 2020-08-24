@@ -1,27 +1,11 @@
 ﻿/*
- * MIT License
- *
- * Copyright (c) 2016-2019 xiongziliang <771730766@qq.com>
+ * Copyright (c) 2016 The ZLMediaKit project authors. All Rights Reserved.
  *
  * This file is part of ZLMediaKit(https://github.com/xiongziliang/ZLMediaKit).
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Use of this source code is governed by MIT license that can be found in the
+ * LICENSE file in the root of the source tree. All contributing project authors
+ * may be found in the AUTHORS file in the root of the source tree.
  */
 
 #ifndef FFMPEG_SOURCE_H
@@ -38,6 +22,23 @@
 using namespace std;
 using namespace toolkit;
 using namespace mediakit;
+
+namespace FFmpeg {
+    extern const string kSnap;
+}
+
+class FFmpegSnap {
+public:
+    /// 创建截图
+    /// \param play_url 播放url地址，只要FFmpeg支持即可
+    /// \param save_path 截图jpeg文件保存路径
+    /// \param timeout_sec 生成截图超时时间(防止阻塞太久)
+    /// \param cb 生成截图成功与否回调
+    static void makeSnap(const string &play_url, const string &save_path, float timeout_sec, const function<void(bool)> &cb);
+private:
+    FFmpegSnap() = delete;
+    ~FFmpegSnap() = delete;
+};
 
 class FFmpegSource : public std::enable_shared_from_this<FFmpegSource> , public MediaSourceEvent{
 public:
@@ -59,8 +60,10 @@ private:
 
     //MediaSourceEvent override
     bool close(MediaSource &sender,bool force) override;
-    void onNoneReader(MediaSource &sender) override ;
     int totalReaderCount(MediaSource &sender) override;
+    void onNoneReader(MediaSource &sender) override;
+    void onRegist(MediaSource &sender, bool regist) override;
+
 private:
     Process _process;
     Timer::Ptr _timer;

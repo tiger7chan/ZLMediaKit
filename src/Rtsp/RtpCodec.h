@@ -1,27 +1,11 @@
 ﻿/*
- * MIT License
- *
- * Copyright (c) 2016-2019 xiongziliang <771730766@qq.com>
+ * Copyright (c) 2016 The ZLMediaKit project authors. All Rights Reserved.
  *
  * This file is part of ZLMediaKit(https://github.com/xiongziliang/ZLMediaKit).
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Use of this source code is governed by MIT license that can be found in the
+ * LICENSE file in the root of the source tree. All contributing project authors
+ * may be found in the AUTHORS file in the root of the source tree.
  */
 
 #ifndef ZLMEDIAKIT_RTPCODEC_H
@@ -82,7 +66,7 @@ public:
     RtpInfo(uint32_t ui32Ssrc,
             uint32_t ui32MtuSize,
             uint32_t ui32SampleRate,
-            uint8_t ui8PlayloadType,
+            uint8_t ui8PayloadType,
             uint8_t ui8Interleaved) {
         if(ui32Ssrc == 0){
             ui32Ssrc = ((uint64_t)this) & 0xFFFFFFFF;
@@ -90,7 +74,7 @@ public:
         _ui32Ssrc = ui32Ssrc;
         _ui32SampleRate = ui32SampleRate;
         _ui32MtuSize = ui32MtuSize;
-        _ui8PlayloadType = ui8PlayloadType;
+        _ui8PayloadType = ui8PayloadType;
         _ui8Interleaved = ui8Interleaved;
     }
 
@@ -100,8 +84,8 @@ public:
         return _ui8Interleaved;
     }
 
-    int getPlayloadType() const {
-        return _ui8PlayloadType;
+    int getPayloadType() const {
+        return _ui8PayloadType;
     }
 
     int getSampleRate() const {
@@ -122,11 +106,12 @@ public:
         return _ui32MtuSize;
     }
     RtpPacket::Ptr makeRtp(TrackType type,const void *pData, unsigned int uiLen, bool bMark, uint32_t uiStamp);
+
 protected:
     uint32_t _ui32Ssrc;
     uint32_t _ui32SampleRate;
     uint32_t _ui32MtuSize;
-    uint8_t _ui8PlayloadType;
+    uint8_t _ui8PayloadType;
     uint8_t _ui8Interleaved;
     uint16_t _ui16Sequence = 0;
     uint32_t _ui32TimeStamp = 0;

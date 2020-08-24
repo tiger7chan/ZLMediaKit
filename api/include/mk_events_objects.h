@@ -1,27 +1,11 @@
 ﻿/*
- * MIT License
- *
- * Copyright (c) 2019 xiongziliang <771730766@qq.com>
+ * Copyright (c) 2016 The ZLMediaKit project authors. All Rights Reserved.
  *
  * This file is part of ZLMediaKit(https://github.com/xiongziliang/ZLMediaKit).
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Use of this source code is governed by MIT license that can be found in the
+ * LICENSE file in the root of the source tree. All contributing project authors
+ * may be found in the AUTHORS file in the root of the source tree.
  */
 
 #ifndef MK_EVENT_OBJECTS_H
@@ -89,6 +73,10 @@ API_EXPORT const char* API_CALL mk_media_info_get_vhost(const mk_media_info ctx)
 API_EXPORT const char* API_CALL mk_media_info_get_app(const mk_media_info ctx);
 //MediaInfo::_streamid
 API_EXPORT const char* API_CALL mk_media_info_get_stream(const mk_media_info ctx);
+//MediaInfo::_host
+API_EXPORT const char* API_CALL mk_media_info_get_host(const mk_media_info ctx);
+//MediaInfo::_port
+API_EXPORT uint16_t API_CALL mk_media_info_get_port(const mk_media_info ctx);
 
 
 ///////////////////////////////////////////MediaSource/////////////////////////////////////////////
@@ -109,7 +97,20 @@ API_EXPORT const char* API_CALL mk_media_source_get_stream(const mk_media_source
 API_EXPORT int API_CALL mk_media_source_get_reader_count(const mk_media_source ctx);
 //MediaSource::totalReaderCount()
 API_EXPORT int API_CALL mk_media_source_get_total_reader_count(const mk_media_source ctx);
-//MediaSource::close()
+/**
+ * 直播源在ZLMediaKit中被称作为MediaSource，
+ * 目前支持3种，分别是RtmpMediaSource、RtspMediaSource、HlsMediaSource
+ * 源的产生有被动和主动方式:
+ * 被动方式分别是rtsp/rtmp/rtp推流、mp4点播
+ * 主动方式包括mk_media_create创建的对象(DevChannel)、mk_proxy_player_create创建的对象(PlayerProxy)
+ * 被动方式你不用做任何处理，ZLMediaKit已经默认适配了MediaSource::close()事件，都会关闭直播流
+ * 主动方式你要设置这个事件的回调，你要自己选择删除对象
+ * 通过mk_proxy_player_set_on_close、mk_media_set_on_close函数可以设置回调,
+ * 请在回调中删除对象来完成媒体的关闭，否则又为什么要调用mk_media_source_close函数？
+ * @param ctx 对象
+ * @param force 是否强制关闭，如果强制关闭，在有人观看的情况下也会关闭
+ * @return 0代表失败，1代表成功
+ */
 API_EXPORT int API_CALL mk_media_source_close(const mk_media_source ctx,int force);
 //MediaSource::seekTo()
 API_EXPORT int API_CALL mk_media_source_seek_to(const mk_media_source ctx,uint32_t stamp);
@@ -315,7 +316,7 @@ API_EXPORT mk_auth_invoker API_CALL mk_auth_invoker_clone(const mk_auth_invoker 
 /**
  * 销毁堆上的克隆对象
  */
-API_EXPORT void API_CALL mk_auth_invoker_clone_relase(const mk_auth_invoker ctx);
+API_EXPORT void API_CALL mk_auth_invoker_clone_release(const mk_auth_invoker ctx);
 
 #ifdef __cplusplus
 }

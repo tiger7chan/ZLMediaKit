@@ -1,33 +1,18 @@
 ﻿/*
- * MIT License
- *
- * Copyright (c) 2016-2019 xiongziliang <771730766@qq.com>
+ * Copyright (c) 2016 The ZLMediaKit project authors. All Rights Reserved.
  *
  * This file is part of ZLMediaKit(https://github.com/xiongziliang/ZLMediaKit).
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in all
- * copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
+ * Use of this source code is governed by MIT license that can be found in the
+ * LICENSE file in the root of the source tree. All contributing project authors
+ * may be found in the AUTHORS file in the root of the source tree.
  */
 
 #include "TsMuxer.h"
 #if defined(ENABLE_HLS)
 #include "mpeg-ts-proto.h"
 #include "mpeg-ts.h"
+#include "Extension/H264.h"
 
 namespace mediakit {
 
@@ -39,25 +24,65 @@ TsMuxer::~TsMuxer() {
     uninit();
 }
 
+void TsMuxer::stampSync(){
+    if(_codec_to_trackid.size() < 2){
+        return;
+    }
+
+    Stamp *audio = nullptr, *video = nullptr;
+    for(auto &pr : _codec_to_trackid){
+        switch (getTrackType((CodecId) pr.first)){
+            case TrackAudio : audio = &pr.second.stamp; break;
+            case TrackVideo : video = &pr.second.stamp; break;
+            default : break;
+        }
+    }
+
+    if(audio && video){
+        //音频时间戳同步于视频，因为音频时间戳被修改后不影响播放
+        audio->syncTo(*video);
+    }
+}
+
 void TsMuxer::addTrack(const Track::Ptr &track) {
     switch (track->getCodecId()) {
         case CodecH264: {
             _have_video = true;
             _codec_to_trackid[track->getCodecId()].track_id = mpeg_ts_add_stream(_context, PSI_STREAM_H264, nullptr, 0);
-        }
             break;
+        }
+
         case CodecH265: {
             _have_video = true;
             _codec_to_trackid[track->getCodecId()].track_id = mpeg_ts_add_stream(_context, PSI_STREAM_H265, nullptr, 0);
-        }
             break;
+        }
+
         case CodecAAC: {
             _codec_to_trackid[track->getCodecId()].track_id = mpeg_ts_add_stream(_context, PSI_STREAM_AAC, nullptr, 0);
+            break;
         }
+
+        case CodecG711A: {
+            _codec_to_trackid[track->getCodecId()].track_id = mpeg_ts_add_stream(_context, PSI_STREAM_AUDIO_G711A, nullptr, 0);
             break;
-        default:
+        }
+
+        case CodecG711U: {
+            _codec_to_trackid[track->getCodecId()].track_id = mpeg_ts_add_stream(_context, PSI_STREAM_AUDIO_G711U, nullptr, 0);
             break;
+        }
+
+        case CodecOpus: {
+            _codec_to_trackid[track->getCodecId()].track_id = mpeg_ts_add_stream(_context, PSI_STREAM_AUDIO_OPUS, nullptr, 0);
+            break;
+        }
+
+        default: WarnL << "mpeg-ts 不支持该编码格式,已忽略:" << track->getCodecName(); break;
     }
+
+    //尝试音视频同步
+    stampSync();
 }
 
 void TsMuxer::inputFrame(const Frame::Ptr &frame) {
@@ -70,8 +95,13 @@ void TsMuxer::inputFrame(const Frame::Ptr &frame) {
     int64_t dts_out, pts_out;
     _is_idr_fast_packet = !_have_video;
     switch (frame->getCodecId()){
-        case CodecH265:
         case CodecH264: {
+            int type = H264_TYPE(*((uint8_t *)frame->data() + frame->prefixSize()));
+            if(type == H264Frame::NAL_SEI){
+                break;
+            }
+        }
+        case CodecH265: {
             //这里的代码逻辑是让SPS、PPS、IDR这些时间戳相同的帧打包到一起当做一个帧处理，
             if (!_frameCached.empty() && _frameCached.back()->dts() != frame->dts()) {
                 Frame::Ptr back = _frameCached.back();
@@ -99,6 +129,14 @@ void TsMuxer::inputFrame(const Frame::Ptr &frame) {
             _frameCached.emplace_back(Frame::getCacheAbleFrame(frame));
         }
             break;
+
+        case CodecAAC: {
+            if (frame->prefixSize() == 0) {
+                WarnL << "必须提供adts头才能mpegts打包";
+                break;
+            }
+        }
+
         default: {
             track_info.stamp.revise(frame->dts(),frame->pts(),dts_out,pts_out);
             _timestamp = dts_out;
