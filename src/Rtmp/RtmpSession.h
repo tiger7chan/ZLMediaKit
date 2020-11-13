@@ -30,11 +30,13 @@ namespace mediakit {
 class RtmpSession: public TcpSession ,public  RtmpProtocol , public MediaSourceEvent{
 public:
     typedef std::shared_ptr<RtmpSession> Ptr;
-    RtmpSession(const Socket::Ptr &_sock);
-    virtual ~RtmpSession();
-    void onRecv(const Buffer::Ptr &pBuf) override;
+    RtmpSession(const Socket::Ptr &sock);
+    ~RtmpSession() override;
+
+    void onRecv(const Buffer::Ptr &buf) override;
     void onError(const SockException &err) override;
     void onManager() override;
+
 private:
     void onProcessCmd(AMFDecoder &dec);
     void onCmd_connect(AMFDecoder &dec);
@@ -54,43 +56,53 @@ private:
     void setMetaData(AMFDecoder &dec);
 
     void onSendMedia(const RtmpPacket::Ptr &pkt);
-    void onSendRawData(const Buffer::Ptr &buffer) override{
-        _ui64TotalBytes += buffer->size();
-        send(buffer);
+    void onSendRawData(Buffer::Ptr buffer) override{
+        _total_bytes += buffer->size();
+        send(std::move(buffer));
     }
-    void onRtmpChunk(RtmpPacket &chunkData) override;
+    void onRtmpChunk(RtmpPacket &chunk_data) override;
 
     template<typename first, typename second>
     inline void sendReply(const char *str, const first &reply, const second &status) {
         AMFEncoder invoke;
-        invoke << str << _dNowReqID << reply << status;
+        invoke << str << _recv_req_id << reply << status;
         sendResponse(MSG_CMD, invoke.data());
     }
 
-    //MediaSourceEvent override
-    bool close(MediaSource &sender,bool force) override ;
+    ///////MediaSourceEvent override///////
+    // 关闭
+    bool close(MediaSource &sender, bool force) override;
+    // 播放总人数
     int totalReaderCount(MediaSource &sender) override;
+    // 获取媒体源类型
+    MediaOriginType getOriginType(MediaSource &sender) const override;
+    // 获取媒体源url或者文件路径
+    string getOriginUrl(MediaSource &sender) const override;
+    // 获取媒体源客户端相关信息
+    std::shared_ptr<SockInfo> getOriginSock(MediaSource &sender) const override;
 
     void setSocketFlags();
     string getStreamId(const string &str);
     void dumpMetadata(const AMFValue &metadata);
+
 private:
-    std::string _strTcUrl;
-    MediaInfo _mediaInfo;
-    double _dNowReqID = 0;
+    bool _paused = false;
     bool _set_meta_data = false;
-    Ticker _ticker;//数据接收时间
-    RtmpMediaSource::RingType::RingReader::Ptr _pRingReader;
-    std::shared_ptr<RtmpMediaSourceImp> _pPublisherSrc;
-    std::weak_ptr<RtmpMediaSource> _pPlayerSrc;
+    double _recv_req_id = 0;
+    //消耗的总流量
+    uint64_t _total_bytes = 0;
+
+    std::string _tc_url;
     //时间戳修整器
     Stamp _stamp[2];
-    //消耗的总流量
-    uint64_t _ui64TotalBytes = 0;
-    bool _paused = false;
+    //数据接收超时计时器
+    Ticker _ticker;
+    MediaInfo _media_info;
 
+    std::weak_ptr<RtmpMediaSource> _player_src;
+    std::shared_ptr<RtmpMediaSourceImp> _publisher_src;
+    RtmpMediaSource::RingType::RingReader::Ptr _ring_reader;
 };
-
 
 /**
  * 支持ssl加密的rtmp服务器
@@ -98,5 +110,4 @@ private:
 typedef TcpSessionWithSSL<RtmpSession> RtmpSessionWithSSL;
 
 } /* namespace mediakit */
-
 #endif /* SRC_RTMP_RTMPSESSION_H_ */

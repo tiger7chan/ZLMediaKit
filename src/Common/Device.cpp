@@ -20,9 +20,9 @@ using namespace toolkit;
 
 namespace mediakit {
 
-DevChannel::DevChannel(const string &vhost, const string &app, const string &stream_id, float duration,
-                       bool enable_rtsp, bool enable_rtmp, bool enable_hls, bool enable_mp4) :
-        MultiMediaSourceMuxer(vhost, app, stream_id, duration, enable_rtsp, enable_rtmp, enable_hls, enable_mp4) {}
+DevChannel::DevChannel(const string &vhost, const string &app, const string &stream_id,
+                       float duration, bool enable_hls, bool enable_mp4) :
+        MultiMediaSourceMuxer(vhost, app, stream_id, duration, true, true, enable_hls, enable_mp4) {}
 
 DevChannel::~DevChannel() {}
 
@@ -164,6 +164,10 @@ void DevChannel::initAudio(const AudioInfo &info) {
         case CodecOpus : addTrack(std::make_shared<OpusTrack>()); break;
         default: WarnL << "不支持该类型的音频编码类型:" << info.codecId; break;
     }
+}
+
+MediaOriginType DevChannel::getOriginType(MediaSource &sender) const {
+    return MediaOriginType::device_chn;
 }
 
 } /* namespace mediakit */
