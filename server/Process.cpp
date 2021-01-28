@@ -1,7 +1,7 @@
 ﻿/*
  * Copyright (c) 2016 The ZLMediaKit project authors. All Rights Reserved.
  *
- * This file is part of ZLMediaKit(https://github.com/xiongziliang/ZLMediaKit).
+ * This file is part of ZLMediaKit(https://github.com/xia-chu/ZLMediaKit).
  *
  * Use of this source code is governed by MIT license that can be found in the
  * LICENSE file in the root of the source tree. All contributing project authors
@@ -47,7 +47,7 @@ void Process::run(const string &cmd, const string &log_file_tmp) {
     if (!fp) {
         fprintf(stderr, "open log file %s failed:%d(%s)\r\n", log_file.data(), get_uv_error(), get_uv_errmsg());
     } else {
-        auto log_fd = (HANDLE)(_get_osfhandle(fileno(fp)));
+        auto log_fd = (HANDLE)(_get_osfhandle(_fileno(fp)));
         // dup to stdout and stderr.
         si.wShowWindow = SW_HIDE;
         // STARTF_USESHOWWINDOW:The wShowWindow member contains additional information.   
@@ -109,7 +109,7 @@ void Process::run(const string &cmd, const string &log_file_tmp) {
         fprintf(stderr, "\r\n\r\n#### pid=%d,cmd=%s #####\r\n\r\n", getpid(), cmd.data());
 
         //关闭父进程继承的fd
-        for (int i = 3; i < 1024; i++) {
+        for (int i = 3; i < getdtablesize(); i++) {
             ::close(i);
         }
 

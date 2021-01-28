@@ -1,7 +1,7 @@
 ﻿/*
  * Copyright (c) 2016 The ZLMediaKit project authors. All Rights Reserved.
  *
- * This file is part of ZLMediaKit(https://github.com/xiongziliang/ZLMediaKit).
+ * This file is part of ZLMediaKit(https://github.com/xia-chu/ZLMediaKit).
  *
  * Use of this source code is governed by MIT license that can be found in the
  * LICENSE file in the root of the source tree. All contributing project authors
@@ -12,6 +12,11 @@
 
 using namespace std;
 using namespace toolkit;
+
+namespace toolkit {
+    StatisticImp(mediakit::Frame);
+    StatisticImp(mediakit::FrameImp);
+}
 
 namespace mediakit{
 
@@ -58,10 +63,10 @@ public:
     }
 
 private:
-    Frame::Ptr _frame;
-    BufferRaw::Ptr _buffer;
     bool _key;
     bool _config;
+    Frame::Ptr _frame;
+    BufferRaw::Ptr _buffer;
 };
 
 Frame::Ptr Frame::getCacheAbleFrame(const Frame::Ptr &frame){
@@ -80,6 +85,7 @@ const char *getCodecName(CodecId codecId) {
         SWITCH_CASE(CodecG711A);
         SWITCH_CASE(CodecG711U);
         SWITCH_CASE(CodecOpus);
+        SWITCH_CASE(CodecL16);
         default : return "unknown codec";
     }
 }
@@ -91,7 +97,8 @@ TrackType getTrackType(CodecId codecId){
         case CodecAAC:
         case CodecG711A:
         case CodecG711U:
-        case CodecOpus: return TrackAudio;
+        case CodecOpus: 
+        case CodecL16: return TrackAudio;
         default: return TrackInvalid;
     }
 }

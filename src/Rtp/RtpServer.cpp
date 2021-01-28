@@ -1,7 +1,7 @@
 ﻿/*
  * Copyright (c) 2016 The ZLMediaKit project authors. All Rights Reserved.
  *
- * This file is part of ZLMediaKit(https://github.com/xiongziliang/ZLMediaKit).
+ * This file is part of ZLMediaKit(https://github.com/xia-chu/ZLMediaKit).
  *
  * Use of this source code is governed by MIT license that can be found in the
  * LICENSE file in the root of the source tree. All contributing project authors
@@ -88,6 +88,17 @@ EventPoller::Ptr RtpServer::getPoller() {
 
 uint16_t RtpServer::getPort() {
     return _udp_server ? _udp_server->get_local_port() : 0;
+}
+
+void RtpServer::pauseRtpCheck(){    
+    if(_rtp_process)
+        _rtp_process->setStopCheckRtp(true);
+}
+
+void RtpServer::resumeRtpCheck(){
+    if(_rtp_process)
+        _rtp_process->setStopCheckRtp(false);
+
 }
 
 }//namespace mediakit

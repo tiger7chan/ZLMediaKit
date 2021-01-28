@@ -1,7 +1,7 @@
 ﻿/*
  * Copyright (c) 2016 The ZLMediaKit project authors. All Rights Reserved.
  *
- * This file is part of ZLMediaKit(https://github.com/xiongziliang/ZLMediaKit).
+ * This file is part of ZLMediaKit(https://github.com/xia-chu/ZLMediaKit).
  *
  * Use of this source code is governed by MIT license that can be found in the
  * LICENSE file in the root of the source tree. All contributing project authors
@@ -62,7 +62,7 @@ protected:
      * @param data
      * @param len
      */
-    void onRtpPacket(const char *data,uint64_t len) override ;
+    void onRtpPacket(const char *data,size_t len) override ;
 
     /**
      * rtp数据包排序后输出
@@ -78,7 +78,7 @@ protected:
      * @param data rtcp内容
      * @param len rtcp内容长度
      */
-    virtual void onRtcpPacket(int track_idx, SdpTrack::Ptr &track, unsigned char *data, unsigned int len);
+    virtual void onRtcpPacket(int track_idx, SdpTrack::Ptr &track, unsigned char *data, size_t len);
 
     /////////////TcpClient override/////////////
     void onConnect(const SockException &err) override;
@@ -102,6 +102,7 @@ private:
     void sendSetup(unsigned int track_idx);
     void sendPause(int type , uint32_t ms);
     void sendDescribe();
+    void sendTeardown();
     void sendKeepAlive();
     void sendRtspRequest(const string &cmd, const string &url ,const StrCaseMap &header = StrCaseMap());
     void sendRtspRequest(const string &cmd, const string &url ,const std::initializer_list<string> &header);
@@ -109,6 +110,11 @@ private:
     void createUdpSockIfNecessary(int track_idx);
 
 private:
+    //是否为性能测试模式
+    bool _benchmark_mode = false;
+    //轮流发送rtcp与GET_PARAMETER保活
+    bool _send_rtcp = true;
+
     string _play_url;
     vector<SdpTrack::Ptr> _sdp_track;
     function<void(const Parser&)> _on_response;
@@ -142,9 +148,6 @@ private:
     RtcpCounter _rtcp_counter[2];
     //rtcp发送时间,trackid idx 为数组下标
     Ticker _rtcp_send_ticker[2];
-
-    //是否为性能测试模式
-    bool _benchmark_mode = false;
 
     //服务器支持的命令
     set<string> _supported_cmd;

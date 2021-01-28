@@ -1,7 +1,7 @@
 ﻿/*
  * Copyright (c) 2016 The ZLMediaKit project authors. All Rights Reserved.
  *
- * This file is part of ZLMediaKit(https://github.com/xiongziliang/ZLMediaKit).
+ * This file is part of ZLMediaKit(https://github.com/xia-chu/ZLMediaKit).
  *
  * Use of this source code is governed by MIT license that can be found in the
  * LICENSE file in the root of the source tree. All contributing project authors
@@ -29,6 +29,7 @@ typedef enum {
     CodecG711A,
     CodecG711U,
     CodecOpus,
+    CodecL16,
     CodecMax = 0x7FFF
 } CodecId;
 
@@ -100,7 +101,7 @@ public:
      * 前缀长度，譬如264前缀为0x00 00 00 01,那么前缀长度就是4
      * aac前缀则为7个字节
      */
-    virtual uint32_t prefixSize() const = 0;
+    virtual size_t prefixSize() const = 0;
 
     /**
      * 返回是否为关键帧
@@ -121,6 +122,10 @@ public:
      * 返回可缓存的frame
      */
     static Ptr getCacheAbleFrame(const Ptr &frame);
+
+private:
+    //对象个数统计
+    ObjectStatistic<Frame> _statistic;
 };
 
 class FrameImp : public Frame {
@@ -131,7 +136,7 @@ public:
         return (char *)_buffer.data();
     }
 
-    uint32_t size() const override {
+    size_t size() const override {
         return _buffer.size();
     }
 
@@ -143,7 +148,7 @@ public:
         return _pts ? _pts : _dts;
     }
 
-    uint32_t prefixSize() const override{
+    size_t prefixSize() const override{
         return _prefix_size;
     }
 
@@ -161,10 +166,12 @@ public:
 
 public:
     CodecId _codec_id = CodecInvalid;
-    BufferLikeString _buffer;
     uint32_t _dts = 0;
     uint32_t _pts = 0;
-    uint32_t _prefix_size = 0;
+    size_t _prefix_size = 0;
+    BufferLikeString _buffer;
+    //对象个数统计
+    ObjectStatistic<FrameImp> _statistic;
 };
 
 /**
@@ -177,7 +184,7 @@ template<typename Parent>
 class FrameInternal : public Parent{
 public:
     typedef std::shared_ptr<FrameInternal> Ptr;
-    FrameInternal(const Frame::Ptr &parent_frame, char *ptr, uint32_t size, int prefix_size)
+    FrameInternal(const Frame::Ptr &parent_frame, char *ptr, size_t size, size_t prefix_size)
             : Parent(ptr, size, parent_frame->dts(), parent_frame->pts(), prefix_size) {
         _parent_frame = parent_frame;
     }
@@ -194,8 +201,10 @@ private:
 template <typename T>
 class ResourcePoolHelper{
 public:
-    ResourcePoolHelper(int size = 8){
-        _pool.setSize(size);
+    ResourcePoolHelper(int size = 0){
+        if (size > 0) {
+            _pool.setSize(size);
+        }
     }
     virtual ~ResourcePoolHelper(){}
 
@@ -298,7 +307,7 @@ public:
     /**
      * 返回代理个数
      */
-    int size() const {
+    size_t size() const {
         return _delegates_write.size();
     }
 private:
@@ -315,12 +324,12 @@ class FrameFromPtr : public Frame{
 public:
     typedef std::shared_ptr<FrameFromPtr> Ptr;
 
-    FrameFromPtr(CodecId codec_id, char *ptr, uint32_t size, uint32_t dts, uint32_t pts = 0, int prefix_size = 0)
+    FrameFromPtr(CodecId codec_id, char *ptr, size_t size, uint32_t dts, uint32_t pts = 0, size_t prefix_size = 0)
             : FrameFromPtr(ptr, size, dts, pts, prefix_size) {
         _codec_id = codec_id;
     }
 
-    FrameFromPtr(char *ptr, uint32_t size, uint32_t dts, uint32_t pts = 0, int prefix_size = 0){
+    FrameFromPtr(char *ptr, size_t size, uint32_t dts, uint32_t pts = 0, size_t prefix_size = 0){
         _ptr = ptr;
         _size = size;
         _dts = dts;
@@ -332,7 +341,7 @@ public:
         return _ptr;
     }
 
-    uint32_t size() const override {
+    size_t size() const override {
         return _size;
     }
 
@@ -344,7 +353,7 @@ public:
         return _pts ? _pts : dts();
     }
 
-    uint32_t prefixSize() const override{
+    size_t prefixSize() const override{
         return _prefix_size;
     }
 
@@ -376,10 +385,10 @@ protected:
 
 protected:
     char *_ptr;
-    uint32_t _size;
     uint32_t _dts;
     uint32_t _pts = 0;
-    uint32_t _prefix_size;
+    size_t _size;
+    size_t _prefix_size;
     CodecId _codec_id = CodecInvalid;
 };
 
@@ -399,7 +408,7 @@ public:
      * @param prefix 帧前缀长度
      * @param offset buffer有效数据偏移量
      */
-    FrameWrapper(const Buffer::Ptr &buf, int64_t dts, int64_t pts, int prefix, int offset) : Parent(buf->data() + offset, buf->size() - offset, dts, pts, prefix){
+    FrameWrapper(const Buffer::Ptr &buf, uint32_t dts, uint32_t pts, size_t prefix, size_t offset) : Parent(buf->data() + offset, buf->size() - offset, dts, pts, prefix){
         _buf = buf;
     }
 
@@ -412,7 +421,7 @@ public:
      * @param offset buffer有效数据偏移量
      * @param codec 帧类型
      */
-    FrameWrapper(const Buffer::Ptr &buf, int64_t dts, int64_t pts, int prefix, int offset, CodecId codec) : Parent(codec, buf->data() + offset, buf->size() - offset, dts, pts, prefix){
+    FrameWrapper(const Buffer::Ptr &buf, uint32_t dts, uint32_t pts, size_t prefix, size_t offset, CodecId codec) : Parent(codec, buf->data() + offset, buf->size() - offset, dts, pts, prefix){
         _buf = buf;
     }
 

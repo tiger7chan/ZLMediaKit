@@ -1,7 +1,7 @@
 ﻿/*
  * Copyright (c) 2016 The ZLMediaKit project authors. All Rights Reserved.
  *
- * This file is part of ZLMediaKit(https://github.com/xiongziliang/ZLMediaKit).
+ * This file is part of ZLMediaKit(https://github.com/xia-chu/ZLMediaKit).
  *
  * Use of this source code is governed by MIT license that can be found in the
  * LICENSE file in the root of the source tree. All contributing project authors
@@ -28,6 +28,7 @@ RtpProcess::RtpProcess(const string &stream_id) {
     _media_info._vhost = DEFAULT_VHOST;
     _media_info._app = RTP_APP_NAME;
     _media_info._streamid = stream_id;
+    _stop_rtp_check.store(false);
 
     GET_CONFIG(string, dump_dir, RtpProxy::kDumpDir);
     {
@@ -69,7 +70,7 @@ RtpProcess::~RtpProcess() {
     }
 }
 
-bool RtpProcess::inputRtp(bool is_udp, const Socket::Ptr &sock, const char *data, int len, const struct sockaddr *addr, uint32_t *dts_out) {
+bool RtpProcess::inputRtp(bool is_udp, const Socket::Ptr &sock, const char *data, size_t len, const struct sockaddr *addr, uint32_t *dts_out) {
     GET_CONFIG(bool, check_source, RtpProxy::kCheckSource);
     //检查源是否合法
     if (!_addr) {
@@ -93,7 +94,7 @@ bool RtpProcess::inputRtp(bool is_udp, const Socket::Ptr &sock, const char *data
 
     _total_bytes += len;
     if (_save_file_rtp) {
-        uint16_t size = len;
+        uint16_t size = (uint16_t)len;
         size = htons(size);
         fwrite((uint8_t *) &size, 2, 1, _save_file_rtp.get());
         fwrite((uint8_t *) data, len, 1, _save_file_rtp.get());
@@ -134,11 +135,19 @@ void RtpProcess::addTrackCompleted() {
 }
 
 bool RtpProcess::alive() {
-    GET_CONFIG(int, timeoutSec, RtpProxy::kTimeoutSec)
+    if (_stop_rtp_check.load()) {
+        return true;
+    }
+
+    GET_CONFIG(uint64_t, timeoutSec, RtpProxy::kTimeoutSec)
     if (_last_frame_time.elapsedTime() / 1000 < timeoutSec) {
         return true;
     }
     return false;
+}
+
+void RtpProcess::setStopCheckRtp(bool is_check){
+    _stop_rtp_check = is_check;
 }
 
 void RtpProcess::onDetach() {
@@ -183,7 +192,7 @@ string RtpProcess::getIdentifier() const {
     return _media_info._streamid;
 }
 
-int RtpProcess::totalReaderCount() {
+int RtpProcess::getTotalReaderCount() {
     return _muxer ? _muxer->totalReaderCount() : 0;
 }
 
@@ -201,7 +210,7 @@ void RtpProcess::emitOnPublish() {
         if (err.empty()) {
             strongSelf->_muxer = std::make_shared<MultiMediaSourceMuxer>(strongSelf->_media_info._vhost,
                                                                          strongSelf->_media_info._app,
-                                                                         strongSelf->_media_info._streamid, 0,
+                                                                         strongSelf->_media_info._streamid, 0.0f,
                                                                          true, true, enableHls, enableMP4);
             strongSelf->_muxer->setMediaListener(strongSelf);
             InfoP(strongSelf) << "允许RTP推流";

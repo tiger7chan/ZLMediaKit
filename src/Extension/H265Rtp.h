@@ -1,7 +1,7 @@
 ﻿/*
  * Copyright (c) 2016 The ZLMediaKit project authors. All Rights Reserved.
  *
- * This file is part of ZLMediaKit(https://github.com/xiongziliang/ZLMediaKit).
+ * This file is part of ZLMediaKit(https://github.com/xia-chu/ZLMediaKit).
  *
  * Use of this source code is governed by MIT license that can be found in the
  * LICENSE file in the root of the source tree. All contributing project authors
@@ -42,14 +42,20 @@ public:
     CodecId getCodecId() const override{
         return CodecH265;
     }
+
 private:
-    bool decodeRtp(const RtpPacket::Ptr &rtp);
-    void onGetH265(const H265Frame::Ptr &frame);
+    bool unpackAp(const uint8_t *ptr, ssize_t size, uint32_t stamp);
+    bool mergeFu(const uint8_t *ptr, ssize_t size, uint16_t seq, uint32_t stamp);
+    bool singleFrame(const uint8_t *ptr, ssize_t size, uint32_t stamp);
+
     H265Frame::Ptr obtainFrame();
+    void outputFrame(const H265Frame::Ptr &frame);
+
 private:
-    H265Frame::Ptr _h265frame;
+    bool _using_donl_field = false;
+    uint16_t _last_seq = 0;
+    H265Frame::Ptr _frame;
     DtsGenerator _dts_generator;
-    int _lastSeq = 0;
 };
 
 /**
@@ -79,7 +85,7 @@ public:
      */
     void inputFrame(const Frame::Ptr &frame) override;
 private:
-    void makeH265Rtp(int nal_type,const void *pData, unsigned int uiLen, bool bMark, bool first_packet,uint32_t uiStamp);
+    void makeH265Rtp(int nal_type,const void *pData, size_t uiLen, bool bMark, bool first_packet,uint32_t uiStamp);
 };
 
 }//namespace mediakit{

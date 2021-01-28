@@ -1,7 +1,7 @@
 ﻿/*
  * Copyright (c) 2016 The ZLMediaKit project authors. All Rights Reserved.
  *
- * This file is part of ZLMediaKit(https://github.com/xiongziliang/ZLMediaKit).
+ * This file is part of ZLMediaKit(https://github.com/xia-chu/ZLMediaKit).
  *
  * Use of this source code is governed by MIT license that can be found in the
  * LICENSE file in the root of the source tree. All contributing project authors
@@ -117,19 +117,22 @@ void PlayerProxy::play(const string &strUrlTmp) {
     });
     MediaPlayer::play(strUrlTmp);
     _pull_url = strUrlTmp;
+    setDirectProxy();
+}
 
+void PlayerProxy::setDirectProxy(){
     MediaSource::Ptr mediaSource;
-    if(dynamic_pointer_cast<RtspPlayer>(_delegate)){
+    if (dynamic_pointer_cast<RtspPlayer>(_delegate)) {
         //rtsp拉流
-        GET_CONFIG(bool,directProxy,Rtsp::kDirectProxy);
-        if(directProxy){
+        GET_CONFIG(bool, directProxy, Rtsp::kDirectProxy);
+        if (directProxy) {
             mediaSource = std::make_shared<RtspMediaSource>(_vhost, _app, _stream_id);
         }
-    } else if(dynamic_pointer_cast<RtmpPlayer>(_delegate)){
+    } else if (dynamic_pointer_cast<RtmpPlayer>(_delegate)) {
         //rtmp拉流,rtmp强制直接代理
         mediaSource = std::make_shared<RtmpMediaSource>(_vhost, _app, _stream_id);
     }
-    if(mediaSource){
+    if (mediaSource) {
         setMediaSource(mediaSource);
         mediaSource->setListener(shared_from_this());
     }
@@ -150,6 +153,7 @@ void PlayerProxy::rePlay(const string &strUrl,int iFailedCnt){
         }
         WarnL << "重试播放[" << iFailedCnt << "]:"  << strUrl;
         strongPlayer->MediaPlayer::play(strUrl);
+        strongPlayer->setDirectProxy();
         return false;
     }, getPoller());
 }
@@ -228,7 +232,7 @@ private:
     };
 
 private:
-    int _audio_idx = 0;
+    uint32_t _audio_idx = 0;
 };
 
 void PlayerProxy::onPlaySuccess() {

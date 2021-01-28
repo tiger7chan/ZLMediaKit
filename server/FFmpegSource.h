@@ -1,7 +1,7 @@
 ﻿/*
  * Copyright (c) 2016 The ZLMediaKit project authors. All Rights Reserved.
  *
- * This file is part of ZLMediaKit(https://github.com/xiongziliang/ZLMediaKit).
+ * This file is part of ZLMediaKit(https://github.com/xia-chu/ZLMediaKit).
  *
  * Use of this source code is governed by MIT license that can be found in the
  * LICENSE file in the root of the source tree. All contributing project authors
@@ -55,19 +55,20 @@ public:
 
     /**
      * 开始播放url
+     * @param ffmpeg_cmd_key FFmpeg拉流命令配置项key，用户可以在配置文件中同时设置多个命令参数模板
      * @param src_url FFmpeg拉流地址
      * @param dst_url FFmpeg推流地址
      * @param timeout_ms 等待结果超时时间，单位毫秒
      * @param cb 成功与否回调
      */
-    void play(const string &src_url, const string &dst_url, int timeout_ms, const onPlay &cb);
+    void play(const string &ffmpeg_cmd_key, const string &src_url, const string &dst_url, int timeout_ms, const onPlay &cb);
 
     /**
      * 设置录制
      * @param enable_hls 是否开启hls直播或录制
      * @param enable_mp4 是否录制mp4
      */
-    void setupRecord(bool enable_hls, bool enable_mp4);
+    void setupRecordFlag(bool enable_hls, bool enable_mp4);
 
 private:
     void findAsync(int maxWaitMS ,const function<void(const MediaSource::Ptr &src)> &cb);
@@ -93,6 +94,7 @@ private:
     MediaInfo _media_info;
     string _src_url;
     string _dst_url;
+    string _ffmpeg_cmd_key;
     function<void()> _onClose;
     Ticker _replay_ticker;
 };

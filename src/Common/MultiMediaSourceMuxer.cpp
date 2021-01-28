@@ -1,7 +1,7 @@
 ﻿/*
 * Copyright (c) 2016 The ZLMediaKit project authors. All Rights Reserved.
 *
-* This file is part of ZLMediaKit(https://github.com/xiongziliang/ZLMediaKit).
+* This file is part of ZLMediaKit(https://github.com/xia-chu/ZLMediaKit).
 *
 * Use of this source code is governed by MIT license that can be found in the
 * LICENSE file in the root of the source tree. All contributing project authors
@@ -11,6 +11,11 @@
 #include <math.h>
 #include "Common/config.h"
 #include "MultiMediaSourceMuxer.h"
+
+namespace toolkit {
+    StatisticImp(mediakit::MultiMediaSourceMuxer);
+}
+
 namespace mediakit {
 
 ///////////////////////////////MultiMuxerPrivate//////////////////////////////////
@@ -260,7 +265,7 @@ static string getTrackInfoStr(const TrackSource *track_src){
                 break;
         }
     }
-    return codec_info;
+    return std::move(codec_info);
 }
 
 void MultiMuxerPrivate::onAllTrackReady() {
@@ -329,12 +334,12 @@ bool MultiMediaSourceMuxer::isRecording(MediaSource &sender, Recorder::type type
     return _muxer->isRecording(sender,type);
 }
 
-void MultiMediaSourceMuxer::startSendRtp(MediaSource &sender, const string &dst_url, uint16_t dst_port, const string &ssrc, bool is_udp, const function<void(const SockException &ex)> &cb){
+void MultiMediaSourceMuxer::startSendRtp(MediaSource &sender, const string &dst_url, uint16_t dst_port, const string &ssrc, bool is_udp, uint16_t src_port, const function<void(uint16_t local_port, const SockException &ex)> &cb){
 #if defined(ENABLE_RTPPROXY)
     RtpSender::Ptr rtp_sender = std::make_shared<RtpSender>(atoi(ssrc.data()));
     weak_ptr<MultiMediaSourceMuxer> weak_self = shared_from_this();
-    rtp_sender->startSend(dst_url, dst_port, is_udp, [weak_self, rtp_sender, cb](const SockException &ex) {
-        cb(ex);
+    rtp_sender->startSend(dst_url, dst_port, is_udp, src_port, [weak_self, rtp_sender, cb, ssrc](uint16_t local_port, const SockException &ex) {
+        cb(local_port, ex);
         auto strong_self = weak_self.lock();
         if (!strong_self || ex) {
             return;
@@ -343,24 +348,36 @@ void MultiMediaSourceMuxer::startSendRtp(MediaSource &sender, const string &dst_
             rtp_sender->addTrack(track);
         }
         rtp_sender->addTrackCompleted();
-        strong_self->_rtp_sender = rtp_sender;
+        lock_guard<mutex> lck(strong_self->_rtp_sender_mtx);
+        strong_self->_rtp_sender[ssrc] = rtp_sender;
     });
 #else
-    cb(SockException(Err_other, "该功能未启用，编译时请打开ENABLE_RTPPROXY宏"));
+    cb(0, SockException(Err_other, "该功能未启用，编译时请打开ENABLE_RTPPROXY宏"));
 #endif//ENABLE_RTPPROXY
 }
 
-bool MultiMediaSourceMuxer::stopSendRtp(MediaSource &sender){
+bool MultiMediaSourceMuxer::stopSendRtp(MediaSource &sender, const string& ssrc){
 #if defined(ENABLE_RTPPROXY)
-    if (_rtp_sender) {
-        _rtp_sender = nullptr;
-        return true;
+    if (ssrc.empty()) {
+        //关闭全部
+        lock_guard<mutex> lck(_rtp_sender_mtx);
+        auto size = _rtp_sender.size();
+        _rtp_sender.clear();
+        return size;
     }
-#endif//ENABLE_RTPPROXY
+    //关闭特定的
+    lock_guard<mutex> lck(_rtp_sender_mtx);
+    return _rtp_sender.erase(ssrc);
+#else
     return false;
+#endif//ENABLE_RTPPROXY
 }
 
 void MultiMediaSourceMuxer::addTrack(const Track::Ptr &track) {
+    if (CodecL16 == track->getCodecId()) {
+        WarnL << "L16音频格式目前只支持RTSP协议推流拉流!!!";
+        return;
+    }
     _muxer->addTrack(track);
 }
 
@@ -392,14 +409,14 @@ public:
     ~FrameModifyStamp() override {}
 
     uint32_t dts() const override{
-        return _dts;
+        return (uint32_t)_dts;
     }
 
     uint32_t pts() const override{
-        return _pts;
+        return (uint32_t)_pts;
     }
 
-    uint32_t prefixSize() const override {
+    size_t prefixSize() const override {
         return _frame->prefixSize();
     }
 
@@ -419,7 +436,7 @@ public:
         return _frame->data();
     }
 
-    uint32_t size() const override {
+    size_t size() const override {
         return _frame->size();
     }
 
@@ -442,9 +459,9 @@ void MultiMediaSourceMuxer::inputFrame(const Frame::Ptr &frame_in) {
     _muxer->inputFrame(frame);
 
 #if defined(ENABLE_RTPPROXY)
-    auto rtp_sender = _rtp_sender;
-    if (rtp_sender) {
-        rtp_sender->inputFrame(frame);
+    lock_guard<mutex> lck(_rtp_sender_mtx);
+    for (auto &pr : _rtp_sender) {
+        pr.second->inputFrame(frame);
     }
 #endif //ENABLE_RTPPROXY
 
@@ -456,7 +473,7 @@ bool MultiMediaSourceMuxer::isEnabled(){
         //无人观看时，每次检查是否真的无人观看
         //有人观看时，则延迟一定时间检查一遍是否无人观看了(节省性能)
 #if defined(ENABLE_RTPPROXY)
-        _is_enable = (_muxer->isEnabled() || _rtp_sender);
+        _is_enable = (_muxer->isEnabled() || _rtp_sender.size());
 #else
         _is_enable = _muxer->isEnabled();
 #endif //ENABLE_RTPPROXY

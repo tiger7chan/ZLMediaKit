@@ -1,7 +1,7 @@
 ﻿/*
  * Copyright (c) 2016 The ZLMediaKit project authors. All Rights Reserved.
  *
- * This file is part of ZLMediaKit(https://github.com/xiongziliang/ZLMediaKit).
+ * This file is part of ZLMediaKit(https://github.com/xia-chu/ZLMediaKit).
  *
  * Use of this source code is governed by MIT license that can be found in the
  * LICENSE file in the root of the source tree. All contributing project authors
@@ -18,7 +18,7 @@
 namespace mediakit{
 
 //判断是否为ts负载
-static inline bool checkTS(const uint8_t *packet, int bytes){
+static inline bool checkTS(const uint8_t *packet, size_t bytes){
     return bytes % TS_PACKET_SIZE == 0 && packet[0] == TS_SYNC_BYTE;
 }
 
@@ -30,18 +30,25 @@ GB28181Process::GB28181Process(const MediaInfo &media_info, MediaSinkInterface *
 
 GB28181Process::~GB28181Process() {}
 
-bool GB28181Process::inputRtp(bool, const char *data, int data_len) {
+bool GB28181Process::inputRtp(bool, const char *data, size_t data_len) {
     return handleOneRtp(0, TrackVideo, 90000, (unsigned char *) data, data_len);
 }
 
 void GB28181Process::onRtpSorted(const RtpPacket::Ptr &rtp, int) {
     if (!_rtp_decoder) {
         switch (rtp->PT) {
-            case 33:
-            case 96: {
+            case 98: {
+                //H264负载
+                _rtp_decoder = std::make_shared<H264RtpDecoder>();
+                _interface->addTrack(std::make_shared<H264Track>());
+                break;
+            }
+            default: {
+                if (rtp->PT != 33 && rtp->PT != 96) {
+                    WarnL << "rtp payload type未识别(" << (int) rtp->PT << "),已按ts或ps负载处理";
+                }
                 //ts或ps负载
-                _rtp_decoder = std::make_shared<CommonRtpDecoder>(CodecInvalid, 256 * 1024);
-
+                _rtp_decoder = std::make_shared<CommonRtpDecoder>(CodecInvalid, 32 * 1024);
                 //设置dump目录
                 GET_CONFIG(string, dump_dir, RtpProxy::kDumpDir);
                 if (!dump_dir.empty()) {
@@ -54,17 +61,6 @@ void GB28181Process::onRtpSorted(const RtpPacket::Ptr &rtp, int) {
                 }
                 break;
             }
-
-            case 98: {
-                //H264负载
-                _rtp_decoder = std::make_shared<H264RtpDecoder>();
-                _interface->addTrack(std::make_shared<H264Track>());
-                break;
-            }
-
-            default:
-                WarnL << "不支持的rtp负载类型:" << (int) rtp->PT;
-                return;
         }
 
         //设置frame回调
@@ -77,7 +73,7 @@ void GB28181Process::onRtpSorted(const RtpPacket::Ptr &rtp, int) {
     _rtp_decoder->inputRtp(rtp, false);
 }
 
-const char *GB28181Process::onSearchPacketTail(const char *packet,uint64_t bytes){
+const char *GB28181Process::onSearchPacketTail(const char *packet,size_t bytes){
     try {
         auto ret = _decoder->input((uint8_t *) packet, bytes);
         if (ret > 0) {
