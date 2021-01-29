@@ -141,7 +141,7 @@ void System::systemSetup(){
     }
 
 // modify by tiger for 由于alpine系统没有实现backtrace_symbols函数，这里定义一个宏，去掉该接口的编译 2021-001-29
-#ifndef ANDROID && !defined(Alpine)
+#if !defined(ANDROID) && !defined(Alpine)
     signal(SIGSEGV, sig_crash);
     signal(SIGABRT, sig_crash);
     NoticeCenter::Instance().addListener(nullptr,kBroadcastOnCrashDump,[](BroadcastOnCrashDumpArgs){
