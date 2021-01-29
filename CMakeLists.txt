@@ -7,6 +7,9 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 #set(CMAKE_BUILD_TYPE "Release")
 
+# add by tiger for 由于alpine系统没有实现backtrace_symbols函数，这里定义一个宏，去掉该接口的编译 2021-001-29
+ADD_DEFINITIONS(-DAlpine)
+
 if(${CMAKE_BUILD_TYPE} MATCHES "Release")
     message(STATUS "Release版本")
     set(BuildType "Release")

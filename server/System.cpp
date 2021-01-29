@@ -50,7 +50,8 @@ string System::execute(const string &cmd) {
     return ret;
 }
 
-#if !defined(ANDROID) && !defined(_WIN32)
+// modify by tiger for 由于alpine系统没有实现backtrace_symbols函数，这里定义一个宏，去掉该接口的编译 2021-001-29
+#if !defined(ANDROID) && !defined(_WIN32) && !defined(Alpine)
 static void sig_crash(int sig) {
     signal(sig, SIG_DFL);
     void *array[MAX_STACK_FRAMES];
