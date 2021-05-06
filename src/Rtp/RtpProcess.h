@@ -83,7 +83,7 @@ private:
 private:
     uint32_t _dts = 0;
     uint64_t _total_bytes = 0;
-    struct sockaddr *_addr = nullptr;
+    struct sockaddr _addr{0};
     Socket::Ptr _sock;
     MediaInfo _media_info;
     Ticker _last_frame_time;
@@ -92,7 +92,9 @@ private:
     std::shared_ptr<FILE> _save_file_video;
     ProcessInterface::Ptr _process;
     MultiMediaSourceMuxer::Ptr _muxer;
-    std::atomic_bool _stop_rtp_check;
+    atomic_bool _stop_rtp_check{false};
+    atomic_flag _busy_flag{false};
+    Ticker _last_check_alive;
 };
 
 }//namespace mediakit

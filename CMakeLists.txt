@@ -56,8 +56,31 @@ option(ENABLE_API "Enable C API SDK" true)
 option(ENABLE_CXX_API "Enable C++ API SDK" false)
 option(ENABLE_TESTS "Enable Tests" true)
 option(ENABLE_SERVER "Enable Server" true)
+option(ENABLE_MEM_DEBUG "Enable Memory Debug" false)
+option(ENABLE_ASAN "Enable Address Sanitize" false)
+
+if (ENABLE_MEM_DEBUG)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wl,-wrap,free  -Wl,-wrap,malloc -Wl,-wrap,realloc -Wl,-wrap,calloc")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS}  -Wl,-wrap,free  -Wl,-wrap,malloc -Wl,-wrap,realloc -Wl,-wrap,calloc")
+    add_definitions(-DENABLE_MEM_DEBUG)
+    message(STATUS "已启用内存调试功能")
+endif ()
+
+if (ENABLE_ASAN)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fsanitize=address -fno-omit-frame-pointer")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fsanitize=address -fno-omit-frame-pointer")
+    message(STATUS "已启用Address Sanitize")
+endif ()
 
 set(LINK_LIB_LIST zlmediakit zltoolkit)
+
+#默认链接jemalloc库避免内存碎片
+find_package(JEMALLOC QUIET)
+if(JEMALLOC_FOUND)
+    message(STATUS "found library:\"${JEMALLOC_LIBRARIES}\"")
+    include_directories(${JEMALLOC_INCLUDE_DIR})
+    list(APPEND  LINK_LIB_LIST ${JEMALLOC_LIBRARIES})
+endif()
 
 #查找openssl是否安装
 find_package(OpenSSL QUIET)
@@ -97,16 +120,6 @@ if (FAAC_FOUND AND ENABLE_FAAC)
     add_definitions(-DENABLE_FAAC)
     list(APPEND LINK_LIB_LIST ${FAAC_LIBRARIES})
 endif ()
-
-if(${CMAKE_BUILD_TYPE} MATCHES "Release")
-    #查找jemalloc是否安装
-    find_package(JEMALLOC QUIET)
-    if(JEMALLOC_FOUND)
-        message(STATUS "found library:\"${JEMALLOC_LIBRARIES}\"")
-        include_directories(${JEMALLOC_INCLUDE_DIR})
-        list(APPEND  LINK_LIB_LIST ${JEMALLOC_LIBRARIES})
-    endif()
-endif()
 
 #set(VS_FALGS "/wd4819 /wd4996 /wd4018 /wd4267 /wd4244 /wd4101 /wd4828 /wd4309 /wd4573 /wd4996" )
 set(VS_FALGS "/wd4819" )

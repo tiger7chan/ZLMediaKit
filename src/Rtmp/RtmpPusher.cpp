@@ -279,7 +279,8 @@ void RtmpPusher::onCmd_onStatus(AMFDecoder &dec) {
     }
 }
 
-void RtmpPusher::onRtmpChunk(RtmpPacket &chunk_data) {
+void RtmpPusher::onRtmpChunk(RtmpPacket::Ptr packet) {
+    auto &chunk_data = *packet;
     switch (chunk_data.type_id) {
         case MSG_CMD:
         case MSG_CMD3: {
@@ -291,7 +292,7 @@ void RtmpPusher::onRtmpChunk(RtmpPacket &chunk_data) {
                 g_mapCmd.emplace("onStatus", &RtmpPusher::onCmd_onStatus);
             });
 
-            AMFDecoder dec(chunk_data.buffer, 0);
+            AMFDecoder dec(chunk_data.buffer, 0, chunk_data.type_id == MSG_CMD3 ? 3 : 0);
             std::string type = dec.load<std::string>();
             auto it = g_mapCmd.find(type);
             if (it != g_mapCmd.end()) {

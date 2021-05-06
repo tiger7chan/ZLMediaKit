@@ -25,25 +25,13 @@ public:
     typedef std::function<void(int stream, int codecid, int flags, int64_t pts, int64_t dts, const void *data, size_t bytes)> onDecode;
     typedef std::function<void(int stream, int codecid, const void *extra, size_t bytes, int finish)> onStream;
 
-    virtual size_t input(const uint8_t *data, size_t bytes) = 0;
+    virtual ssize_t input(const uint8_t *data, size_t bytes) = 0;
     virtual void setOnDecode(onDecode cb) = 0;
     virtual void setOnStream(onStream cb) = 0;
 
 protected:
     Decoder() = default;
     virtual ~Decoder() = default;
-};
-
-/**
- * 合并一些时间戳相同的frame
- */
-class FrameMerger {
-public:
-    FrameMerger() = default;
-    ~FrameMerger() = default;
-    void inputFrame(const Frame::Ptr &frame,const function<void(uint32_t dts,uint32_t pts,const Buffer::Ptr &buffer)> &cb);
-private:
-    List<Frame::Ptr> _frameCached;
 };
 
 class DecoderImp{
@@ -57,7 +45,7 @@ public:
     ~DecoderImp() = default;
 
     static Ptr createDecoder(Type type, MediaSinkInterface *sink);
-    size_t input(const uint8_t *data, size_t bytes);
+    ssize_t input(const uint8_t *data, size_t bytes);
 
 protected:
     void onTrack(const Track::Ptr &track);
@@ -71,7 +59,7 @@ private:
 private:
     Decoder::Ptr _decoder;
     MediaSinkInterface *_sink;
-    FrameMerger _merger;
+    FrameMerger _merger{FrameMerger::none};
     Ticker _last_unsported_print;
 };
 

@@ -36,7 +36,7 @@ void RtmpSession::onError(const SockException& err) {
     //流量统计事件广播
     GET_CONFIG(uint32_t,iFlowThreshold,General::kFlowThreshold);
 
-    if(_total_bytes > iFlowThreshold * 1024){
+    if(_total_bytes >= iFlowThreshold * 1024){
         NoticeCenter::Instance().emitEvent(Broadcast::kBroadcastFlowReport, _media_info, _total_bytes, duration, isPlayer, static_cast<SockInfo &>(*this));
     }
 }
@@ -70,11 +70,6 @@ void RtmpSession::onRecv(const Buffer::Ptr &buf) {
 
 void RtmpSession::onCmd_connect(AMFDecoder &dec) {
     auto params = dec.load<AMFValue>();
-    double amf_ver = 0;
-    AMFValue objectEncoding = params["objectEncoding"];
-    if(objectEncoding){
-        amf_ver = objectEncoding.as_number();
-    }
     ///////////set chunk size////////////////
     sendChunkSize(60000);
     ////////////window Acknowledgement size/////
@@ -102,7 +97,7 @@ void RtmpSession::onCmd_connect(AMFDecoder &dec) {
     status.set("level", ok ? "status" : "error");
     status.set("code", ok ? "NetConnection.Connect.Success" : "NetConnection.Connect.InvalidApp");
     status.set("description", ok ? "Connection succeeded." : "InvalidApp.");
-    status.set("objectEncoding", amf_ver);
+    status.set("objectEncoding", params["objectEncoding"]);
     sendReply(ok ? "_result" : "_error", version, status);
     if (!ok) {
         throw std::runtime_error("Unsupported application: " + _media_info._app);
@@ -420,17 +415,11 @@ void RtmpSession::onCmd_pause(AMFDecoder &dec) {
 }
 
 void RtmpSession::setMetaData(AMFDecoder &dec) {
-    if (!_publisher_src) {
-        throw std::runtime_error("not a publisher");
-    }
     std::string type = dec.load<std::string>();
     if (type != "onMetaData") {
         throw std::runtime_error("can only set metadata");
     }
-    auto metadata = dec.load<AMFValue>();
-//    dumpMetadata(metadata);
-    _publisher_src->setMetaData(metadata);
-    _set_meta_data = true;
+    _publisher_metadata = dec.load<AMFValue>();
 }
 
 void RtmpSession::onProcessCmd(AMFDecoder &dec) {
@@ -458,18 +447,19 @@ void RtmpSession::onProcessCmd(AMFDecoder &dec) {
     (this->*fun)(dec);
 }
 
-void RtmpSession::onRtmpChunk(RtmpPacket &chunk_data) {
+void RtmpSession::onRtmpChunk(RtmpPacket::Ptr packet) {
+    auto &chunk_data = *packet;
     switch (chunk_data.type_id) {
     case MSG_CMD:
     case MSG_CMD3: {
-        AMFDecoder dec(chunk_data.buffer, chunk_data.type_id == MSG_CMD3 ? 1 : 0);
+        AMFDecoder dec(chunk_data.buffer, chunk_data.type_id == MSG_CMD3 ? 3 : 0);
         onProcessCmd(dec);
         break;
     }
 
     case MSG_DATA:
     case MSG_DATA3: {
-        AMFDecoder dec(chunk_data.buffer, chunk_data.type_id == MSG_CMD3 ? 1 : 0);
+        AMFDecoder dec(chunk_data.buffer, chunk_data.type_id == MSG_DATA3 ? 3 : 0);
         std::string type = dec.load<std::string>();
         if (type == "@setDataFrame") {
             setMetaData(dec);
@@ -482,7 +472,8 @@ void RtmpSession::onRtmpChunk(RtmpPacket &chunk_data) {
     case MSG_AUDIO:
     case MSG_VIDEO: {
         if (!_publisher_src) {
-            throw std::runtime_error("Not a rtmp publisher!");
+            WarnL << "Not a rtmp publisher!";
+            return;
         }
         GET_CONFIG(bool, rtmp_modify_stamp, Rtmp::kModifyStamp);
         if (rtmp_modify_stamp) {
@@ -491,11 +482,11 @@ void RtmpSession::onRtmpChunk(RtmpPacket &chunk_data) {
             chunk_data.time_stamp = (uint32_t)dts_out;
         }
 
-        if (!_set_meta_data && !chunk_data.isCfgFrame()) {
+        if (!_set_meta_data) {
             _set_meta_data = true;
-            _publisher_src->setMetaData(TitleMeta().getMetadata());
+            _publisher_src->setMetaData(_publisher_metadata ? _publisher_metadata : TitleMeta().getMetadata());
         }
-        _publisher_src->onWrite(std::make_shared<RtmpPacket>(std::move(chunk_data)));
+        _publisher_src->onWrite(std::move(packet));
         break;
     }
 
