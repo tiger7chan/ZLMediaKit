@@ -19,6 +19,7 @@
 #include "Rtsp/RtspSession.h"
 #include "Http/HttpSession.h"
 #include "WebHook.h"
+#include "WebApi.h"
 
 using namespace toolkit;
 using namespace mediakit;
@@ -126,9 +127,9 @@ void do_http_hook(const string &url,const ArgsType &body,const function<void(con
     requester->startRequester(url, [url, func, bodyStr, requester, pTicker](const SockException &ex,
                                                                             const string &status,
                                                                             const HttpClient::HttpHeader &header,
-                                                                            const string &strRecvBody) {
-        onceToken token(nullptr, [&]() {
-            const_cast<HttpRequester::Ptr &>(requester).reset();
+                                                                            const string &strRecvBody) mutable{
+        onceToken token(nullptr, [&]() mutable{
+            requester.reset();
         });
         parse_http_response(ex,status,header,strRecvBody,[&](const Value &obj,const string &err){
             if (func) {
@@ -300,11 +301,16 @@ void installWebHook(){
             return;
         }
         ArgsType body;
-        body["regist"] = bRegist;
-        body["schema"] = sender.getSchema();
-        body["vhost"] = sender.getVhost();
-        body["app"] = sender.getApp();
-        body["stream"] = sender.getId();
+        if (bRegist) {
+            body = makeMediaSourceJson(sender);
+            body["regist"] = bRegist;
+        } else {
+            body["schema"] = sender.getSchema();
+            body["vhost"] = sender.getVhost();
+            body["app"] = sender.getApp();
+            body["stream"] = sender.getId();
+            body["regist"] = bRegist;
+        }
         //执行hook
         do_http_hook(hook_stream_chaned,body, nullptr);
     });

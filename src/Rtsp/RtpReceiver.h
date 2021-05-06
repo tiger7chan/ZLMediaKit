@@ -62,7 +62,7 @@ public:
      */
     void sortPacket(SEQ seq, T packet) {
         if (seq < _next_seq_out) {
-            if (_next_seq_out - seq < kMax) {
+            if (_next_seq_out < seq + kMax) {
                 //过滤seq回退包(回环包除外)
                 return;
             }
@@ -165,39 +165,49 @@ public:
     RtpReceiver();
     virtual ~RtpReceiver();
 
+    class BadRtpException : public invalid_argument {
+    public:
+        template<typename Type>
+        BadRtpException(Type &&type) : invalid_argument(std::forward<Type>(type)) {}
+        ~BadRtpException() = default;
+    };
+
 protected:
     /**
      * 输入数据指针生成并排序rtp包
-     * @param track_index track下标索引
+     * @param index track下标索引
      * @param type track类型
      * @param samplerate rtp时间戳基准时钟，视频为90000，音频为采样率
-     * @param rtp_raw_ptr rtp数据指针
-     * @param rtp_raw_len rtp数据指针长度
+     * @param ptr rtp数据指针
+     * @param len rtp数据指针长度
      * @return 解析成功返回true
      */
-    bool handleOneRtp(int track_index, TrackType type, int samplerate, unsigned char *rtp_raw_ptr, size_t rtp_raw_len);
+    bool handleOneRtp(int index, TrackType type, int samplerate, uint8_t *ptr, size_t len);
 
     /**
      * rtp数据包排序后输出
      * @param rtp rtp数据包
      * @param track_index track索引
      */
-    virtual void onRtpSorted(const RtpPacket::Ptr &rtp, int track_index) {}
+    virtual void onRtpSorted(RtpPacket::Ptr rtp, int track_index) {}
+
+    /**
+     * 解析出rtp但还未排序
+     * @param rtp rtp数据包
+     * @param track_index track索引
+     */
+    virtual void onBeforeRtpSorted(const RtpPacket::Ptr &rtp, int track_index) {}
 
     void clear();
-    void setPoolSize(size_t size);
     size_t getJitterSize(int track_index) const;
     size_t getCycleCount(int track_index) const;
     uint32_t getSSRC(int track_index) const;
 
 private:
     uint32_t _ssrc[2] = {0, 0};
-    //ssrc不匹配计数
-    size_t _ssrc_err_count[2] = {0, 0};
+    Ticker _ssrc_alive[2];
     //rtp排序缓存，根据seq排序
     PacketSortor<RtpPacket::Ptr> _rtp_sortor[2];
-    //rtp循环池
-    RtspMediaSource::PoolType _rtp_pool;
 };
 
 }//namespace mediakit

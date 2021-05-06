@@ -11,24 +11,17 @@
 #if defined(ENABLE_RTPPROXY)
 #include "GB28181Process.h"
 #include "RtpProcess.h"
-#include "RtpSplitter.h"
-#include "Util/File.h"
 #include "Http/HttpTSPlayer.h"
 
 #define RTP_APP_NAME "rtp"
 
 namespace mediakit {
 
-static string printAddress(const struct sockaddr *addr) {
-    return StrPrinter << SockUtil::inet_ntoa(((struct sockaddr_in *) addr)->sin_addr) << ":" << ntohs(((struct sockaddr_in *) addr)->sin_port);
-}
-
 RtpProcess::RtpProcess(const string &stream_id) {
     _media_info._schema = RTP_APP_NAME;
     _media_info._vhost = DEFAULT_VHOST;
     _media_info._app = RTP_APP_NAME;
     _media_info._streamid = stream_id;
-    _stop_rtp_check.store(false);
 
     GET_CONFIG(string, dump_dir, RtpProxy::kDumpDir);
     {
@@ -60,35 +53,33 @@ RtpProcess::~RtpProcess() {
 
     //流量统计事件广播
     GET_CONFIG(uint32_t, iFlowThreshold, General::kFlowThreshold);
-    if (_total_bytes > iFlowThreshold * 1024) {
+    if (_total_bytes >= iFlowThreshold * 1024) {
         NoticeCenter::Instance().emitEvent(Broadcast::kBroadcastFlowReport, _media_info, _total_bytes, duration, false, static_cast<SockInfo &>(*this));
-    }
-
-    if (_addr) {
-        delete _addr;
-        _addr = nullptr;
     }
 }
 
 bool RtpProcess::inputRtp(bool is_udp, const Socket::Ptr &sock, const char *data, size_t len, const struct sockaddr *addr, uint32_t *dts_out) {
-    GET_CONFIG(bool, check_source, RtpProxy::kCheckSource);
-    //检查源是否合法
-    if (!_addr) {
-        _addr = new struct sockaddr;
+    auto is_busy = _busy_flag.test_and_set();
+    if (is_busy) {
+        //其他线程正在执行本函数
+        WarnP(this) << "其他线程正在执行本函数";
+        return false;
+    }
+    //没有其他线程执行本函数
+    onceToken token(nullptr, [&]() {
+        //本函数执行完毕时，释放状态
+        _busy_flag.clear();
+    });
+
+    if (!_sock) {
+        //第一次运行本函数
         _sock = sock;
-        memcpy(_addr, addr, sizeof(struct sockaddr));
-        DebugP(this) << "bind to address:" << printAddress(_addr);
-        //推流鉴权
+        _addr = *addr;
         emitOnPublish();
     }
 
     if (!_muxer) {
         //无权限推流
-        return false;
-    }
-
-    if (check_source && memcmp(_addr, addr, sizeof(struct sockaddr)) != 0) {
-        DebugP(this) << "address dismatch:" << printAddress(addr) << " != " << printAddress(_addr);
         return false;
     }
 
@@ -136,9 +127,15 @@ void RtpProcess::addTrackCompleted() {
 
 bool RtpProcess::alive() {
     if (_stop_rtp_check.load()) {
-        return true;
+        if(_last_check_alive.elapsedTime() > 5 * 60 * 1000){
+            //最多暂停5分钟的rtp超时检测，因为NAT映射有效期一般不会太长
+            _stop_rtp_check = false;
+        } else {
+            return true;
+        }
     }
 
+    _last_check_alive.resetTime();
     GET_CONFIG(uint64_t, timeoutSec, RtpProxy::kTimeoutSec)
     if (_last_frame_time.elapsedTime() / 1000 < timeoutSec) {
         return true;
@@ -148,6 +145,9 @@ bool RtpProcess::alive() {
 
 void RtpProcess::setStopCheckRtp(bool is_check){
     _stop_rtp_check = is_check;
+    if (!is_check) {
+        _last_frame_time.resetTime();
+    }
 }
 
 void RtpProcess::onDetach() {
@@ -161,17 +161,11 @@ void RtpProcess::setOnDetach(const function<void()> &cb) {
 }
 
 string RtpProcess::get_peer_ip() {
-    if (_addr) {
-        return SockUtil::inet_ntoa(((struct sockaddr_in *) _addr)->sin_addr);
-    }
-    return "0.0.0.0";
+    return SockUtil::inet_ntoa(((struct sockaddr_in &) _addr).sin_addr);
 }
 
 uint16_t RtpProcess::get_peer_port() {
-    if (!_addr) {
-        return 0;
-    }
-    return ntohs(((struct sockaddr_in *) _addr)->sin_port);
+    return ntohs(((struct sockaddr_in &) _addr).sin_port);
 }
 
 string RtpProcess::get_local_ip() {

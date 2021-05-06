@@ -54,7 +54,7 @@ DecoderImp::Ptr DecoderImp::createDecoder(Type type, MediaSinkInterface *sink){
     return DecoderImp::Ptr(new DecoderImp(decoder, sink));
 }
 
-size_t DecoderImp::input(const uint8_t *data, size_t bytes){
+ssize_t DecoderImp::input(const uint8_t *data, size_t bytes){
     return _decoder->input(data, bytes);
 }
 
@@ -98,24 +98,6 @@ static const char *getCodecName(int codec_id) {
         SWITCH_CASE(PSI_STREAM_AUDIO_OPUS);
         default : return "unknown codec";
     }
-}
-
-void FrameMerger::inputFrame(const Frame::Ptr &frame,const function<void(uint32_t dts,uint32_t pts,const Buffer::Ptr &buffer)> &cb){
-    if (!_frameCached.empty() && _frameCached.back()->dts() != frame->dts()) {
-        Frame::Ptr back = _frameCached.back();
-        Buffer::Ptr merged_frame = back;
-        if(_frameCached.size() != 1){
-            BufferLikeString merged;
-            merged.reserve(back->size() + 1024);
-            _frameCached.for_each([&](const Frame::Ptr &frame){
-                merged.append(frame->data(),frame->size());
-            });
-            merged_frame = std::make_shared<BufferOffset<BufferLikeString> >(std::move(merged));
-        }
-        cb(back->dts(),back->pts(),merged_frame);
-        _frameCached.clear();
-    }
-    _frameCached.emplace_back(Frame::getCacheAbleFrame(frame));
 }
 
 void DecoderImp::onStream(int stream, int codecid, const void *extra, size_t bytes, int finish){
@@ -177,16 +159,16 @@ void DecoderImp::onDecode(int stream,int codecid,int flags,int64_t pts,int64_t d
 
     switch (codecid) {
         case PSI_STREAM_H264: {
-            auto frame = std::make_shared<H264FrameNoCacheAble>((char *) data, bytes, (uint32_t)dts, (uint32_t)pts,0);
-            _merger.inputFrame(frame,[this](uint32_t dts, uint32_t pts, const Buffer::Ptr &buffer) {
+            auto frame = std::make_shared<H264FrameNoCacheAble>((char *) data, bytes, (uint32_t)dts, (uint32_t)pts, prefixSize((char *) data, bytes));
+            _merger.inputFrame(frame,[this](uint32_t dts, uint32_t pts, const Buffer::Ptr &buffer, bool) {
                 onFrame(std::make_shared<FrameWrapper<H264FrameNoCacheAble> >(buffer, dts, pts, prefixSize(buffer->data(), buffer->size()), 0));
             });
             break;
         }
 
         case PSI_STREAM_H265: {
-            auto frame = std::make_shared<H265FrameNoCacheAble>((char *) data, bytes, (uint32_t)dts, (uint32_t)pts, 0);
-            _merger.inputFrame(frame,[this](uint32_t dts, uint32_t pts, const Buffer::Ptr &buffer) {
+            auto frame = std::make_shared<H265FrameNoCacheAble>((char *) data, bytes, (uint32_t)dts, (uint32_t)pts, prefixSize((char *) data, bytes));
+            _merger.inputFrame(frame,[this](uint32_t dts, uint32_t pts, const Buffer::Ptr &buffer, bool) {
                 onFrame(std::make_shared<FrameWrapper<H265FrameNoCacheAble> >(buffer, dts, pts, prefixSize(buffer->data(), buffer->size()), 0));
             });
             break;

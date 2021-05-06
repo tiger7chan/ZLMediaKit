@@ -34,9 +34,10 @@ bool GB28181Process::inputRtp(bool, const char *data, size_t data_len) {
     return handleOneRtp(0, TrackVideo, 90000, (unsigned char *) data, data_len);
 }
 
-void GB28181Process::onRtpSorted(const RtpPacket::Ptr &rtp, int) {
+void GB28181Process::onRtpSorted(RtpPacket::Ptr rtp, int) {
+    auto pt = rtp->getHeader()->pt;
     if (!_rtp_decoder) {
-        switch (rtp->PT) {
+        switch (pt) {
             case 98: {
                 //H264负载
                 _rtp_decoder = std::make_shared<H264RtpDecoder>();
@@ -44,8 +45,8 @@ void GB28181Process::onRtpSorted(const RtpPacket::Ptr &rtp, int) {
                 break;
             }
             default: {
-                if (rtp->PT != 33 && rtp->PT != 96) {
-                    WarnL << "rtp payload type未识别(" << (int) rtp->PT << "),已按ts或ps负载处理";
+                if (pt != 33 && pt != 96) {
+                    WarnL << "rtp payload type未识别(" << (int) pt << "),已按ts或ps负载处理";
                 }
                 //ts或ps负载
                 _rtp_decoder = std::make_shared<CommonRtpDecoder>(CodecInvalid, 32 * 1024);
@@ -76,14 +77,16 @@ void GB28181Process::onRtpSorted(const RtpPacket::Ptr &rtp, int) {
 const char *GB28181Process::onSearchPacketTail(const char *packet,size_t bytes){
     try {
         auto ret = _decoder->input((uint8_t *) packet, bytes);
-        if (ret > 0) {
+        if (ret >= 0) {
+            //解析成功全部或部分
             return packet + ret;
         }
-        return nullptr;
+        //解析失败，丢弃所有数据
+        return packet + bytes;
     } catch (std::exception &ex) {
         InfoL << "解析ps或ts异常: bytes=" << bytes
               << " ,exception=" << ex.what()
-              << " ,hex=" << hexdump((uint8_t *) packet, bytes);
+              << " ,hex=" << hexdump((uint8_t *) packet, MIN(bytes,32));
         if (remainDataSize() > 256 * 1024) {
             //缓存太多数据无法处理则上抛异常
             throw;

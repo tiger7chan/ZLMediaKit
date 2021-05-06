@@ -319,7 +319,7 @@ void RtmpPlayer::onStreamDry(uint32_t stream_index) {
     onPlayResult_l(SockException(Err_other, "rtmp stream dry"), true);
 }
 
-void RtmpPlayer::onMediaData_l(const RtmpPacket::Ptr &chunk_data) {
+void RtmpPlayer::onMediaData_l(RtmpPacket::Ptr chunk_data) {
     _rtmp_recv_ticker.resetTime();
     if (!_play_timer) {
         //已经触发了onPlayResult事件，直接触发onMediaData事件
@@ -338,8 +338,8 @@ void RtmpPlayer::onMediaData_l(const RtmpPacket::Ptr &chunk_data) {
     }
 }
 
-
-void RtmpPlayer::onRtmpChunk(RtmpPacket &chunk_data) {
+void RtmpPlayer::onRtmpChunk(RtmpPacket::Ptr packet) {
+    auto &chunk_data = *packet;
     typedef void (RtmpPlayer::*rtmp_func_ptr)(AMFDecoder &dec);
     static unordered_map<string, rtmp_func_ptr> s_func_map;
     static onceToken token([]() {
@@ -354,7 +354,7 @@ void RtmpPlayer::onRtmpChunk(RtmpPacket &chunk_data) {
         case MSG_CMD3:
         case MSG_DATA:
         case MSG_DATA3: {
-            AMFDecoder dec(chunk_data.buffer, 0);
+            AMFDecoder dec(chunk_data.buffer, 0, (chunk_data.type_id == MSG_DATA3 || chunk_data.type_id == MSG_CMD3) ? 3 : 0);
             std::string type = dec.load<std::string>();
             auto it = s_func_map.find(type);
             if (it != s_func_map.end()) {
@@ -379,7 +379,7 @@ void RtmpPlayer::onRtmpChunk(RtmpPacket &chunk_data) {
                 }
                 _metadata_got = true;
             }
-            onMediaData_l(std::make_shared<RtmpPacket>(std::move(chunk_data)));
+            onMediaData_l(std::move(packet));
             break;
         }
 

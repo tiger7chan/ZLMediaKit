@@ -60,7 +60,7 @@ private:
         _total_bytes += buffer->size();
         send(std::move(buffer));
     }
-    void onRtmpChunk(RtmpPacket &chunk_data) override;
+    void onRtmpChunk(RtmpPacket::Ptr chunk_data) override;
 
     template<typename first, typename second>
     inline void sendReply(const char *str, const first &reply, const second &status) {
@@ -98,8 +98,8 @@ private:
     //数据接收超时计时器
     Ticker _ticker;
     MediaInfo _media_info;
-
     std::weak_ptr<RtmpMediaSource> _player_src;
+    AMFValue _publisher_metadata;
     std::shared_ptr<RtmpMediaSourceImp> _publisher_src;
     RtmpMediaSource::RingType::RingReader::Ptr _ring_reader;
 };
