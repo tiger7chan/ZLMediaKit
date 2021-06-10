@@ -99,10 +99,15 @@ void RtspSession::onManager() {
         }
     }
 
-    if ((_rtp_type == Rtsp::RTP_UDP || _push_src ) && _alive_ticker.elapsedTime() > keep_alive_sec * 1000 && _enable_send_rtp) {
-        //如果是推流端或者rtp over udp类型的播放端，那么就做超时检测
-        shutdown(SockException(Err_timeout,"rtp over udp session timeouted"));
+    if (_push_src && _alive_ticker.elapsedTime() > keep_alive_sec * 1000) {
+        //推流超时
+        shutdown(SockException(Err_timeout, "pusher session timeouted"));
         return;
+    }
+
+    if (!_push_src && _rtp_type == Rtsp::RTP_UDP && _enable_send_rtp && _alive_ticker.elapsedTime() > keep_alive_sec * 4000) {
+        //rtp over udp播放器超时
+        shutdown(SockException(Err_timeout, "rtp over udp player timeouted"));
     }
 }
 
@@ -202,81 +207,58 @@ void RtspSession::handleReq_ANNOUNCE(const Parser &parser) {
                                                                        _media_info._vhost,
                                                                        _media_info._app,
                                                                        _media_info._streamid));
-    if(src){
+    if (src) {
         sendRtspResponse("406 Not Acceptable", {"Content-Type", "text/plain"}, "Already publishing.");
         string err = StrPrinter << "ANNOUNCE:"
                                 << "Already publishing:"
                                 << _media_info._vhost << " "
                                 << _media_info._app << " "
                                 << _media_info._streamid << endl;
-        throw SockException(Err_shutdown,err);
+        throw SockException(Err_shutdown, err);
     }
 
     auto full_url = parser.FullUrl();
-    if(end_with(full_url,".sdp")){
+    _content_base = full_url;
+    if (end_with(full_url, ".sdp")) {
         //去除.sdp后缀，防止EasyDarwin推流器强制添加.sdp后缀
-        full_url = full_url.substr(0,full_url.length() - 4);
+        full_url = full_url.substr(0, full_url.length() - 4);
         _media_info.parse(full_url);
     }
 
-    if(_media_info._app.empty() || _media_info._streamid.empty()){
+    if (_media_info._app.empty() || _media_info._streamid.empty()) {
         //推流rtsp url必须最少两级(rtsp://host/app/stream_id)，不允许莫名其妙的推流url
         static constexpr auto err = "rtsp推流url非法,最少确保两级rtsp url";
         sendRtspResponse("403 Forbidden", {"Content-Type", "text/plain"}, err);
         throw SockException(Err_shutdown, StrPrinter << err << ":" << full_url);
     }
 
-    SdpParser sdpParser(parser.Content());
-    _sessionid = makeRandStr(12);
-    _sdp_track = sdpParser.getAvailableTrack();
-    if (_sdp_track.empty()) {
-        //sdp无效
-        static constexpr auto err = "sdp中无有效track";
-        sendRtspResponse("403 Forbidden", {"Content-Type", "text/plain"}, err);
-        throw SockException(Err_shutdown,StrPrinter << err << ":" << full_url);
-    }
-    _rtcp_context.clear();
-    for (auto &track : _sdp_track) {
-        _rtcp_context.emplace_back(std::make_shared<RtcpContext>(track->_samplerate, true));
-    }
-    _push_src = std::make_shared<RtspMediaSourceImp>(_media_info._vhost, _media_info._app, _media_info._streamid);
-    _push_src->setListener(dynamic_pointer_cast<MediaSourceEvent>(shared_from_this()));
-    _push_src->setSdp(sdpParser.toString());
-    sendRtspResponse("200 OK",{"Content-Base", _content_base + "/"});
-}
-
-void RtspSession::handleReq_RECORD(const Parser &parser){
-    if (_sdp_track.empty() || parser["Session"] != _sessionid) {
-        send_SessionNotFound();
-        throw SockException(Err_shutdown, _sdp_track.empty() ? "can not find any availabe track when record" : "session not found when record");
-    }
-    auto onRes = [this](const string &err, bool enableHls, bool enableMP4){
+    auto onRes = [this, parser, full_url](const string &err, bool enableHls, bool enableMP4){
         bool authSuccess = err.empty();
-        if(!authSuccess){
+        if (!authSuccess) {
             sendRtspResponse("401 Unauthorized", {"Content-Type", "text/plain"}, err);
-            shutdown(SockException(Err_shutdown,StrPrinter << "401 Unauthorized:" << err));
+            shutdown(SockException(Err_shutdown, StrPrinter << "401 Unauthorized:" << err));
             return;
         }
 
-        //设置转协议
+        SdpParser sdpParser(parser.Content());
+        _sessionid = makeRandStr(12);
+        _sdp_track = sdpParser.getAvailableTrack();
+        if (_sdp_track.empty()) {
+            //sdp无效
+            static constexpr auto err = "sdp中无有效track";
+            sendRtspResponse("403 Forbidden", {"Content-Type", "text/plain"}, err);
+            shutdown(SockException(Err_shutdown, StrPrinter << err << ":" << full_url));
+            return;
+        }
+        _rtcp_context.clear();
+        for (auto &track : _sdp_track) {
+            _rtcp_context.emplace_back(std::make_shared<RtcpContext>(track->_samplerate, true));
+        }
+        _push_src = std::make_shared<RtspMediaSourceImp>(_media_info._vhost, _media_info._app, _media_info._streamid);
+        _push_src->setListener(dynamic_pointer_cast<MediaSourceEvent>(shared_from_this()));
         _push_src->setProtocolTranslation(enableHls, enableMP4);
-
-        _StrPrinter rtp_info;
-        for(auto &track : _sdp_track){
-            if (track->_inited == false) {
-                //还有track没有setup
-                shutdown(SockException(Err_shutdown,"track not setuped"));
-                return;
-            }
-            rtp_info << "url=" << track->getControlUrl(_content_base) << ",";
-        }
-
-        rtp_info.pop_back();
-        sendRtspResponse("200 OK", {"RTP-Info",rtp_info});
-        if(_rtp_type == Rtsp::RTP_TCP){
-            //如果是rtsp推流服务器，并且是TCP推流，设置socket flags,，这样能提升接收性能
-            setSocketFlags();
-        }
+        _push_src->setSdp(sdpParser.toString());
+        sendRtspResponse("200 OK");
     };
 
     weak_ptr<RtspSession> weakSelf = dynamic_pointer_cast<RtspSession>(shared_from_this());
@@ -296,11 +278,34 @@ void RtspSession::handleReq_RECORD(const Parser &parser){
 
     //rtsp推流需要鉴权
     auto flag = NoticeCenter::Instance().emitEvent(Broadcast::kBroadcastMediaPublish, _media_info, invoker, static_cast<SockInfo &>(*this));
-    if(!flag){
+    if (!flag) {
         //该事件无人监听,默认不鉴权
-        GET_CONFIG(bool,toHls,General::kPublishToHls);
-        GET_CONFIG(bool,toMP4,General::kPublishToMP4);
-        onRes("",toHls,toMP4);
+        GET_CONFIG(bool, toHls, General::kPublishToHls);
+        GET_CONFIG(bool, toMP4, General::kPublishToMP4);
+        onRes("", toHls, toMP4);
+    }
+}
+
+void RtspSession::handleReq_RECORD(const Parser &parser){
+    if (_sdp_track.empty() || parser["Session"] != _sessionid) {
+        send_SessionNotFound();
+        throw SockException(Err_shutdown, _sdp_track.empty() ? "can not find any availabe track when record" : "session not found when record");
+    }
+
+    _StrPrinter rtp_info;
+    for (auto &track : _sdp_track) {
+        if (track->_inited == false) {
+            //还有track没有setup
+            shutdown(SockException(Err_shutdown, "track not setuped"));
+            return;
+        }
+        rtp_info << "url=" << track->getControlUrl(_content_base) << ",";
+    }
+    rtp_info.pop_back();
+    sendRtspResponse("200 OK", {"RTP-Info", rtp_info});
+    if (_rtp_type == Rtsp::RTP_TCP) {
+        //如果是rtsp推流服务器，并且是TCP推流，设置socket flags,，这样能提升接收性能
+        setSocketFlags();
     }
 }
 
@@ -614,7 +619,7 @@ void RtspSession::send_SessionNotFound() {
 
 void RtspSession::handleReq_Setup(const Parser &parser) {
     //处理setup命令，该函数可能进入多次
-    int trackIdx = getTrackIndexByControlUrl(parser.Url());
+    int trackIdx = getTrackIndexByControlUrl(parser.FullUrl());
     SdpTrack::Ptr &trackRef = _sdp_track[trackIdx];
     if (trackRef->_inited) {
         //已经初始化过该Track
@@ -686,14 +691,14 @@ void RtspSession::handleReq_Setup(const Parser &parser) {
         peerAddr.sin_port = htons(ui16RtpPort);
         peerAddr.sin_addr.s_addr = inet_addr(get_peer_ip().data());
         bzero(&(peerAddr.sin_zero), sizeof peerAddr.sin_zero);
-        pr.first->setSendPeerAddr((struct sockaddr *) (&peerAddr));
+        pr.first->bindPeerAddr((struct sockaddr *) (&peerAddr));
 
         //设置rtcp发送目标地址
         peerAddr.sin_family = AF_INET;
         peerAddr.sin_port = htons(ui16RtcpPort);
         peerAddr.sin_addr.s_addr = inet_addr(get_peer_ip().data());
         bzero(&(peerAddr.sin_zero), sizeof peerAddr.sin_zero);
-        pr.second->setSendPeerAddr((struct sockaddr *) (&peerAddr));
+        pr.second->bindPeerAddr((struct sockaddr *) (&peerAddr));
 
         //尝试获取客户端nat映射地址
         startListenPeerUdpData(trackIdx);
@@ -925,13 +930,13 @@ void RtspSession::onRcvPeerUdpData(int interleaved, const Buffer::Ptr &buf, cons
         } else if (!_udp_connected_flags.count(interleaved)) {
             //这是rtsp播放器的rtp打洞包
             _udp_connected_flags.emplace(interleaved);
-            _rtp_socks[interleaved / 2]->setSendPeerAddr(&addr);
+            _rtp_socks[interleaved / 2]->bindPeerAddr(&addr);
         }
     } else {
         //rtcp包
         if (!_udp_connected_flags.count(interleaved)) {
             _udp_connected_flags.emplace(interleaved);
-            _rtcp_socks[(interleaved - 1) / 2]->setSendPeerAddr(&addr);
+            _rtcp_socks[(interleaved - 1) / 2]->bindPeerAddr(&addr);
         }
         onRtcpPacket((interleaved - 1) / 2, _sdp_track[(interleaved - 1) / 2], buf->data(), buf->size());
     }
@@ -1139,7 +1144,7 @@ void RtspSession::updateRtcpContext(const RtpPacket::Ptr &rtp){
         };
 
         auto ssrc = rtp->getSSRC();
-        auto rtcp = _push_src ?  rtcp_ctx->createRtcpRR(ssrc + 1, ssrc) : rtcp_ctx->createRtcpSR(ssrc + 1);
+        auto rtcp = _push_src ?  rtcp_ctx->createRtcpRR(ssrc + 1, ssrc) : rtcp_ctx->createRtcpSR(ssrc);
         auto rtcp_sdes = RtcpSdes::create({SERVER_NAME});
         rtcp_sdes->items.type = (uint8_t)SdesType::RTCP_SDES_CNAME;
         rtcp_sdes->items.ssrc = htonl(ssrc);

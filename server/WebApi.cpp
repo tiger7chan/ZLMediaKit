@@ -25,6 +25,7 @@
 #include "Http/HttpRequester.h"
 #include "Http/HttpSession.h"
 #include "Network/TcpServer.h"
+#include "Network/UdpServer.h"
 #include "Player/PlayerProxy.h"
 #include "Util/MD5.h"
 #include "WebApi.h"
@@ -250,7 +251,7 @@ static inline string getProxyKey(const string &vhost,const string &app,const str
 Value makeMediaSourceJson(MediaSource &media){
     Value item;
     item["schema"] = media.getSchema();
-    item["vhost"] = media.getVhost();
+    item[VHOST_KEY] = media.getVhost();
     item["app"] = media.getApp();
     item["stream"] = media.getId();
     item["createStamp"] = (Json::UInt64) media.getCreateStamp();
@@ -261,6 +262,8 @@ Value makeMediaSourceJson(MediaSource &media){
     item["originType"] = (int) media.getOriginType();
     item["originTypeStr"] = getOriginTypeString(media.getOriginType());
     item["originUrl"] = media.getOriginUrl();
+    item["isRecordingMP4"] = media.isRecording(Recorder::type_mp4);
+    item["isRecordingHLS"] = media.isRecording(Recorder::type_hls);
     auto originSock = media.getOriginSock();
     if (originSock) {
         item["originSock"]["local_ip"] = originSock->get_local_ip();
@@ -536,7 +539,7 @@ void installWebApi() {
         uint16_t local_port = allArgs["local_port"].as<uint16_t>();
         string &peer_ip = allArgs["peer_ip"];
 
-        SessionMap::Instance().for_each_session([&](const string &id,const TcpSession::Ptr &session){
+        SessionMap::Instance().for_each_session([&](const string &id,const Session::Ptr &session){
             if(local_port != 0 && local_port != session->get_local_port()){
                 return;
             }
@@ -575,8 +578,8 @@ void installWebApi() {
         string &peer_ip = allArgs["peer_ip"];
         size_t count_hit = 0;
 
-        list<TcpSession::Ptr> session_list;
-        SessionMap::Instance().for_each_session([&](const string &id,const TcpSession::Ptr &session){
+        list<Session::Ptr> session_list;
+        SessionMap::Instance().for_each_session([&](const string &id,const Session::Ptr &session){
             if(local_port != 0 && local_port != session->get_local_port()){
                 return;
             }
@@ -631,7 +634,7 @@ void installWebApi() {
         });
 
         //被主动关闭拉流
-        player->setOnClose([key](){
+        player->setOnClose([key](const SockException &ex){
             lock_guard<recursive_mutex> lck(s_proxyMapMtx);
             s_proxyMap.erase(key);
         });
@@ -1036,6 +1039,8 @@ void installWebApi() {
 
         val["data"]["TcpServer"] = (Json::UInt64)(ObjectStatistic<TcpServer>::count());
         val["data"]["TcpSession"] = (Json::UInt64)(ObjectStatistic<TcpSession>::count());
+        val["data"]["UdpServer"] = (Json::UInt64)(ObjectStatistic<UdpServer>::count());
+        val["data"]["UdpSession"] = (Json::UInt64)(ObjectStatistic<UdpSession>::count());
         val["data"]["TcpClient"] = (Json::UInt64)(ObjectStatistic<TcpClient>::count());
         val["data"]["Socket"] = (Json::UInt64)(ObjectStatistic<Socket>::count());
 
